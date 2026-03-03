@@ -1,0 +1,18 @@
+{
+  "name": "vnflood",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "src/frontend",
+    "src/backend",
+    "src/ai",
+    "src/mobile"
+  ],
+  "scripts": {
+    "frontend": "npm run dev --workspace frontend",
+    "backend": "npm run dev --workspace backend",
+    "ai": "npm run dev --workspace ai",
+    "mobile": "npm run start --workspace mobile"
+  }
+}
+
