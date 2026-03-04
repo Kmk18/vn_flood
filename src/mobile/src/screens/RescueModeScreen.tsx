@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useColorScheme } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -40,12 +40,9 @@ export const RescueModeScreen = () => {
         </Text>
       </View>
 
-      <FlatList
-        data={mockRescuePoints}
-        keyExtractor={(item) => item.id}
-        renderItem={renderRescuePoint}
-        contentContainerStyle={styles.list}
-      />
+      <ScrollView contentContainerStyle={styles.list}>
+        {mockRescuePoints.map((item) => <React.Fragment key={item.id}>{renderRescuePoint({ item })}</React.Fragment>)}
+      </ScrollView>
     </View>
   );
 };

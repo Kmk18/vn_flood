@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, FlatList, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, useColorScheme } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
@@ -73,12 +73,9 @@ export const ChatbotScreen = () => {
         <Text style={[styles.title, Typography.h2, { color: themeColors.text }]}>AI Assistant</Text>
       </View>
 
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.messageList}
-      />
+      <ScrollView contentContainerStyle={styles.messageList}>
+        {messages.map((item) => <React.Fragment key={item.id}>{renderMessage({ item })}</React.Fragment>)}
+      </ScrollView>
 
       <View style={[styles.inputContainer, { borderTopColor: themeColors.border }]}>
         <View style={styles.inputWrapper}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useColorScheme } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme';
 import { useAlertStore, Alert } from '../store/useAlertStore';
 import { Card } from '../components/Card';
@@ -12,7 +12,7 @@ export const NotificationsScreen = () => {
   const renderAlert = ({ item }: { item: Alert }) => (
     <Card 
       isDarkMode={isDarkMode} 
-      style={[styles.card, item.isUrgent && { borderColor: themeColors.danger, borderWidth: 2 }]}
+      style={item.isUrgent ? [styles.card, { borderColor: themeColors.danger, borderWidth: 2 }] : styles.card}
     >
       <View style={styles.header}>
         <Text style={[Typography.h3, { color: item.isUrgent ? themeColors.danger : themeColors.text }]}>
@@ -31,17 +31,15 @@ export const NotificationsScreen = () => {
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       <Text style={[styles.title, Typography.h1, { color: themeColors.text }]}>Alerts</Text>
-      <FlatList
-        data={alerts}
-        keyExtractor={(item) => item.id}
-        renderItem={renderAlert}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
+      <ScrollView contentContainerStyle={styles.list}>
+        {alerts.length === 0 ? (
           <Text style={[Typography.body1, { color: themeColors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
             No alerts at this time.
           </Text>
-        }
-      />
+        ) : (
+          alerts.map(item => <React.Fragment key={item.id}>{renderAlert({ item })}</React.Fragment>)
+        )}
+      </ScrollView>
     </View>
   );
 };
