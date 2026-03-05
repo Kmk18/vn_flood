@@ -17,15 +17,15 @@ interface AlertState {
 const mockAlerts: Alert[] = [
   {
     id: '1',
-    title: 'Flood Warning',
-    message: 'Water levels rising rapidly in downtown area. Evacuate if possible.',
+    title: 'Cảnh báo Lũ lụt',
+    message: 'Mực nước đang dâng cao nhanh chóng ở khu vực trung tâm. Vui lòng sơ tán nếu có thể.',
     isUrgent: true,
     timestamp: new Date().toISOString(),
   },
   {
     id: '2',
-    title: 'Weather Advisory',
-    message: 'Heavy rain expected for the next 24 hours.',
+    title: 'Cố vấn Thời tiết',
+    message: 'Dự kiến sẽ có mưa lớn trong 24 giờ tới.',
     isUrgent: false,
     timestamp: new Date(Date.now() - 3600000).toISOString(),
   }

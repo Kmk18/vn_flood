@@ -1,6 +1,7 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme';
+import { GlobalStyles } from '../theme/globalStyles';
 
 interface ButtonProps {
   title: string;
@@ -31,7 +32,7 @@ export const Button: React.FC<ButtonProps> = React.memo(({
   return (
     <TouchableOpacity
       style={[
-        styles.button,
+        GlobalStyles.button,
         { backgroundColor: disabled ? themeColors.border : backgroundColor },
         style
       ]}
@@ -42,24 +43,10 @@ export const Button: React.FC<ButtonProps> = React.memo(({
       {loading ? (
         <ActivityIndicator color={textColor} />
       ) : (
-        <Text style={[styles.text, Typography.button, { color: textColor }, textStyle]}>
+        <Text style={[GlobalStyles.buttonText, Typography.button, { color: textColor }, textStyle]}>
           {title}
         </Text>
       )}
     </TouchableOpacity>
   );
-});
-
-const styles = StyleSheet.create({
-  button: {
-    height: 50,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.m,
-    marginVertical: Spacing.s,
-  },
-  text: {
-    textAlign: 'center',
-  },
 });

@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Switch, useColorScheme } from 'react-native';
+import { View, Text, Switch, useColorScheme } from 'react-native';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Colors, Spacing, Typography } from '../theme';
+import { GlobalStyles } from '../theme/globalStyles';
 import { Button } from '../components/Button';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -14,38 +15,38 @@ export const ProfileScreen = () => {
   const [locationSharing, setLocationSharing] = React.useState(true);
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, Typography.h1, { color: themeColors.text }]}>Settings</Text>
+    <View style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+      <View style={GlobalStyles.headerContainer}>
+        <Text style={[Typography.h1, { color: themeColors.text }]}>Cài đặt</Text>
       </View>
 
-      <View style={styles.section}>
+      <View style={GlobalStyles.profileSection}>
         <Text style={[Typography.h3, { color: themeColors.text, marginBottom: Spacing.s }]}>
-          Account
+          Tài khoản
         </Text>
         {isAuthenticated ? (
           <>
             <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
-              Name: {user?.name || 'User'}
+              Tên: {user?.name || 'Người dùng'}
             </Text>
             <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
-              Email: {user?.email || 'No email provided'}
+              Email: {user?.email || 'Chưa cung cấp email'}
             </Text>
           </>
         ) : (
           <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
-            You are currently using the app as a guest.
+            Bạn đang sử dụng ứng dụng với tư cách khách.
           </Text>
         )}
       </View>
 
-      <View style={[styles.section, { borderTopWidth: 1, borderTopColor: themeColors.border }]}>
+      <View style={[GlobalStyles.profileSection, { borderTopWidth: 1, borderTopColor: themeColors.border }]}>
         <Text style={[Typography.h3, { color: themeColors.text, marginBottom: Spacing.m }]}>
-          Preferences
+          Tùy chọn
         </Text>
         
-        <View style={styles.settingRow}>
-          <Text style={[Typography.body1, { color: themeColors.text }]}>Share Location</Text>
+        <View style={GlobalStyles.profileSettingRow}>
+          <Text style={[Typography.body1, { color: themeColors.text }]}>Chia sẻ Vị trí</Text>
           <Switch 
             value={locationSharing} 
             onValueChange={setLocationSharing}
@@ -54,20 +55,20 @@ export const ProfileScreen = () => {
         </View>
 
         <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: Spacing.xs }]}>
-          Enabling location sharing helps rescue teams find you faster during emergencies.
+          Bật chia sẻ vị trí giúp đội cứu hộ tìm thấy bạn nhanh hơn trong trường hợp khẩn cấp.
         </Text>
       </View>
 
-      <View style={styles.logoutContainer}>
+      <View style={GlobalStyles.profileLogoutContainer}>
         {isAuthenticated ? (
           <Button 
-            title="Log Out" 
+            title="Đăng xuất" 
             variant="danger" 
             onPress={logout} 
           />
         ) : (
           <Button 
-            title="Log In or Register" 
+            title="Đăng nhập hoặc Đăng ký" 
             variant="primary" 
             onPress={() => navigation.navigate('Auth')} 
           />
@@ -76,31 +77,3 @@ export const ProfileScreen = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: Spacing.l,
-    paddingTop: 60,
-    paddingBottom: Spacing.m,
-  },
-  title: {
-    
-  },
-  section: {
-    paddingHorizontal: Spacing.l,
-    paddingVertical: Spacing.m,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  logoutContainer: {
-    marginTop: 'auto',
-    padding: Spacing.l,
-    paddingBottom: Spacing.xl * 2,
-  },
-});
