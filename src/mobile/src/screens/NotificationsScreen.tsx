@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, useColorScheme } from 'react-native';
+import { View, Text, ScrollView, useColorScheme } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme';
+import { GlobalStyles } from '../theme/globalStyles';
 import { useAlertStore, Alert } from '../store/useAlertStore';
 import { Card } from '../components/Card';
 
@@ -12,9 +13,9 @@ export const NotificationsScreen = () => {
   const renderAlert = ({ item }: { item: Alert }) => (
     <Card 
       isDarkMode={isDarkMode} 
-      style={item.isUrgent ? [styles.card, { borderColor: themeColors.danger, borderWidth: 2 }] : styles.card}
+      style={item.isUrgent ? [{ borderColor: themeColors.danger, borderWidth: 2 }] : undefined}
     >
-      <View style={styles.header}>
+      <View style={GlobalStyles.listItemHeader}>
         <Text style={[Typography.h3, { color: item.isUrgent ? themeColors.danger : themeColors.text }]}>
           {item.title}
         </Text>
@@ -29,12 +30,12 @@ export const NotificationsScreen = () => {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-      <Text style={[styles.title, Typography.h1, { color: themeColors.text }]}>Alerts</Text>
-      <ScrollView contentContainerStyle={styles.list}>
+    <View style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+      <Text style={[GlobalStyles.headerContainer, GlobalStyles.headerTitleCenter, Typography.h1, { color: themeColors.text }]}>Cảnh báo</Text>
+      <ScrollView contentContainerStyle={GlobalStyles.listContainer}>
         {alerts.length === 0 ? (
           <Text style={[Typography.body1, { color: themeColors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
-            No alerts at this time.
+            Không có cảnh báo nào.
           </Text>
         ) : (
           alerts.map(item => <React.Fragment key={item.id}>{renderAlert({ item })}</React.Fragment>)
@@ -43,25 +44,3 @@ export const NotificationsScreen = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  title: {
-    paddingHorizontal: Spacing.l,
-    paddingTop: 60,
-    paddingBottom: Spacing.m,
-  },
-  list: {
-    paddingHorizontal: Spacing.m,
-  },
-  card: {
-    marginBottom: Spacing.m,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-});

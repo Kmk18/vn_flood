@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, useColorScheme, ScrollView } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, useColorScheme, ScrollView } from 'react-native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Colors, Spacing, Typography } from '../theme';
+import { GlobalStyles } from '../theme/globalStyles';
 
 export const SignupScreen = () => {
   const isDarkMode = useColorScheme() === 'dark';
@@ -15,15 +16,15 @@ export const SignupScreen = () => {
 
   const handleSignup = () => {
     if (!name || !email || !password) {
-      setError('Please fill in all fields.');
+      setError('Vui lòng điền đầy đủ thông tin.');
       return;
     }
     if (!email.includes('@')) {
-      setError('Please enter a valid email address.');
+      setError('Vui lòng nhập một địa chỉ email hợp lệ.');
       return;
     }
     if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+      setError('Mật khẩu phải dài ít nhất 6 ký tự.');
       return;
     }
     
@@ -32,20 +33,20 @@ export const SignupScreen = () => {
 
   return (
     <KeyboardAvoidingView 
-      style={[styles.container, { backgroundColor: themeColors.background }]} 
+      style={[GlobalStyles.container, { backgroundColor: themeColors.background }]} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={GlobalStyles.scrollContent}>
         <Text style={[Typography.h1, { color: themeColors.text, marginBottom: Spacing.s }]}>
-          Create Account
+          Tạo tài khoản
         </Text>
         <Text style={[Typography.body1, { color: themeColors.textSecondary, marginBottom: Spacing.xl }]}>
-          Join the emergency alert network.
+          Tham gia mạng lưới cảnh báo khẩn cấp.
         </Text>
 
         <Input
-          label="Full Name"
-          placeholder="Enter your name"
+          label="Họ và tên"
+          placeholder="Nhập tên của bạn"
           value={name}
           onChangeText={(text) => { setName(text); setError(''); }}
           isDarkMode={isDarkMode}
@@ -53,7 +54,7 @@ export const SignupScreen = () => {
 
         <Input
           label="Email"
-          placeholder="Enter your email"
+          placeholder="Nhập email của bạn"
           value={email}
           onChangeText={(text) => { setEmail(text); setError(''); }}
           keyboardType="email-address"
@@ -62,8 +63,8 @@ export const SignupScreen = () => {
         />
 
         <Input
-          label="Password"
-          placeholder="Create a password"
+          label="Mật khẩu"
+          placeholder="Tạo một mật khẩu"
           value={password}
           onChangeText={(text) => { setPassword(text); setError(''); }}
           secureTextEntry
@@ -73,12 +74,12 @@ export const SignupScreen = () => {
 
         <View style={{ marginTop: Spacing.l }}>
           <Button 
-            title="Sign Up" 
+            title="Đăng ký" 
             onPress={handleSignup} 
             isDarkMode={isDarkMode} 
           />
           <Button 
-            title="Back to Sign In" 
+            title="Quay lại Đăng nhập" 
             variant="secondary" 
             onPress={() => {}} 
             isDarkMode={isDarkMode} 
@@ -89,15 +90,3 @@ export const SignupScreen = () => {
     </KeyboardAvoidingView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.l,
-    paddingVertical: Spacing.xl,
-  },
-});

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, useColorScheme } from 'react-native';
+import { View, Text, useColorScheme } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Colors, Spacing, Typography } from '../theme';
+import { GlobalStyles } from '../theme/globalStyles';
 import { Button } from '../components/Button';
 import { useMapStore } from '../store/useMapStore';
 
@@ -20,73 +21,40 @@ export const MapScreen = () => {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={GlobalStyles.container}>
       <MapView
         provider={PROVIDER_DEFAULT}
-        style={styles.map}
+        style={GlobalStyles.mapAbsolute}
         initialRegion={region}
         userInterfaceStyle={isDarkMode ? 'dark' : 'light'}
       >
         {showFloodZones && (
           <Marker
             coordinate={{ latitude: 21.03, longitude: 105.85 }}
-            title="High Flood Risk"
-            description="Water level rising above 2 meters."
+            title="Nguy cơ ngập lụt cao"
+            description="Mực nước đang dâng cao hơn 2 mét."
             pinColor={Colors.light.danger}
           />
         )}
       </MapView>
 
-      <View style={styles.layerControls}>
+      <View style={GlobalStyles.mapLayerControls}>
         <Button 
-          title={showFloodZones ? 'Hide Flood Zones' : 'Show Flood Zones'} 
+          title={showFloodZones ? 'Ẩn Vùng Ngập Lụt' : 'Hiện Vùng Ngập Lụt'} 
           variant="secondary"
           onPress={toggleFloodZones}
-          style={styles.controlButton}
+          style={GlobalStyles.mapControlButton}
         />
       </View>
 
-      <View style={styles.helpButtonContainer}>
+      <View style={GlobalStyles.mapHelpButtonContainer}>
         <Button 
-          title="REQUEST HELP" 
+          title="YÊU CẦU CỨU HỘ" 
           variant="danger"
           onPress={() => navigation.navigate('RescueMode')}
-          style={styles.helpButton}
+          style={GlobalStyles.mapHelpButton}
         />
       </View>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  layerControls: {
-    position: 'absolute',
-    top: 50,
-    right: Spacing.m,
-  },
-  controlButton: {
-    paddingHorizontal: Spacing.s,
-    height: 40,
-  },
-  helpButtonContainer: {
-    position: 'absolute',
-    bottom: Spacing.xl,
-    left: Spacing.l,
-    right: Spacing.l,
-  },
-  helpButton: {
-    height: 60,
-    borderRadius: 30,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-  },
-});

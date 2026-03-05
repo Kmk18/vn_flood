@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, useColorScheme } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, useColorScheme } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Colors, Spacing, Typography } from '../theme';
+import { GlobalStyles } from '../theme/globalStyles';
 import { useAuthStore } from '../store/useAuthStore';
 
 export const LoginScreen = () => {
@@ -18,11 +19,11 @@ export const LoginScreen = () => {
 
   const handleLogin = () => {
     if (!email || !password) {
-      setError('Please fill in all fields.');
+      setError('Vui lòng điền đầy đủ thông tin.');
       return;
     }
     if (!email.includes('@')) {
-      setError('Please enter a valid email address.');
+      setError('Vui lòng nhập một địa chỉ email hợp lệ.');
       return;
     }
     
@@ -35,20 +36,20 @@ export const LoginScreen = () => {
 
   return (
     <KeyboardAvoidingView 
-      style={[styles.container, { backgroundColor: themeColors.background }]} 
+      style={[GlobalStyles.container, { backgroundColor: themeColors.background }]} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.content}>
+      <View style={GlobalStyles.centeredContent}>
         <Text style={[Typography.h1, { color: themeColors.text, marginBottom: Spacing.s }]}>
           VNFlood
         </Text>
         <Text style={[Typography.body1, { color: themeColors.textSecondary, marginBottom: Spacing.xl }]}>
-          Sign in to access flood forecasts and request rescue.
+          Đăng nhập để xem dự báo lũ lụt và yêu cầu cứu hộ.
         </Text>
 
         <Input
           label="Email"
-          placeholder="Enter your email"
+          placeholder="Nhập email của bạn"
           value={email}
           onChangeText={(text) => { setEmail(text); setError(''); }}
           keyboardType="email-address"
@@ -57,8 +58,8 @@ export const LoginScreen = () => {
         />
 
         <Input
-          label="Password"
-          placeholder="Enter your password"
+          label="Mật khẩu"
+          placeholder="Nhập mật khẩu của bạn"
           value={password}
           onChangeText={(text) => { setPassword(text); setError(''); }}
           secureTextEntry
@@ -68,14 +69,14 @@ export const LoginScreen = () => {
 
         <View style={{ marginTop: Spacing.l }}>
           <Button 
-            title="Sign In" 
+            title="Đăng nhập" 
             onPress={handleLogin} 
             isDarkMode={isDarkMode} 
           />
           <Button 
-            title="Create an Account" 
+            title="Tạo tài khoản" 
             variant="secondary" 
-            onPress={() => {}} 
+            onPress={() => navigation.navigate('Signup')} 
             isDarkMode={isDarkMode} 
             style={{ marginTop: Spacing.m }}
           />
@@ -84,14 +85,3 @@ export const LoginScreen = () => {
     </KeyboardAvoidingView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.l,
-  },
-});

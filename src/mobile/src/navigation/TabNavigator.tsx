@@ -27,13 +27,13 @@ export const TabNavigator = () => {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'map';
 
-          if (route.name === 'Map') {
+          if (route.name === 'Bản đồ') {
             iconName = focused ? 'map' : 'map-outline';
-          } else if (route.name === 'Alerts') {
+          } else if (route.name === 'Cảnh báo') {
             iconName = focused ? 'warning' : 'warning-outline';
-          } else if (route.name === 'Assistant') {
+          } else if (route.name === 'Trợ lý') {
             iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-          } else if (route.name === 'Profile') {
+          } else if (route.name === 'Hồ sơ') {
             iconName = focused ? 'person' : 'person-outline';
           }
 
@@ -41,10 +41,10 @@ export const TabNavigator = () => {
         },
       })}
     >
-      <Tab.Screen name="Map" component={MapScreen} />
-      <Tab.Screen name="Alerts" component={NotificationsScreen} />
-      <Tab.Screen name="Assistant" component={ChatbotScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Bản đồ" component={MapScreen} />
+      <Tab.Screen name="Cảnh báo" component={NotificationsScreen} />
+      <Tab.Screen name="Trợ lý" component={ChatbotScreen} />
+      <Tab.Screen name="Hồ sơ" component={ProfileScreen} />
     </Tab.Navigator>
   );
 };

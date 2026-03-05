@@ -1,6 +1,7 @@
 import React from 'react';
-import { TextInput, View, Text, StyleSheet, TextInputProps } from 'react-native';
+import { TextInput, View, Text, TextInputProps } from 'react-native';
 import { Colors, Spacing, Typography } from '../theme';
+import { GlobalStyles } from '../theme/globalStyles';
 
 interface InputProps extends TextInputProps {
   label: string;
@@ -14,13 +15,13 @@ export const Input: React.FC<InputProps> = React.memo(({
   const themeColors = isDarkMode ? Colors.dark : Colors.light;
 
   return (
-    <View style={styles.container}>
+    <View style={GlobalStyles.inputContainer}>
       <Text style={[Typography.body2, { color: themeColors.textSecondary, marginBottom: Spacing.xs }]}>
         {label}
       </Text>
       <TextInput
         style={[
-          styles.input,
+          GlobalStyles.inputField,
           Typography.body1,
           { 
             color: themeColors.text,
@@ -39,16 +40,4 @@ export const Input: React.FC<InputProps> = React.memo(({
       ) : null}
     </View>
   );
-});
-
-const styles = StyleSheet.create({
-  container: {
-    marginVertical: Spacing.s,
-  },
-  input: {
-    height: 50,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: Spacing.m,
-  },
 });
