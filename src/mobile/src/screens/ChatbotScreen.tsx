@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, ScrollView, useColorScheme } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { Input } from '../components/Input';
@@ -66,11 +67,12 @@ export const ChatbotScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={GlobalStyles.headerContainer}>
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+      <KeyboardAvoidingView 
+        style={GlobalStyles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={GlobalStyles.headerContainer}>
         <Text style={[GlobalStyles.headerTitleCenter, Typography.h2, { color: themeColors.text }]}>Trợ lý AI</Text>
       </View>
 
@@ -94,6 +96,7 @@ export const ChatbotScreen = () => {
           style={GlobalStyles.chatSendButton}
         />
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };

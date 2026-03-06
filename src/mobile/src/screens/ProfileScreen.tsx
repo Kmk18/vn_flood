@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Switch, useColorScheme } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Colors, Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
@@ -15,7 +16,7 @@ export const ProfileScreen = () => {
   const [locationSharing, setLocationSharing] = React.useState(true);
 
   return (
-    <View style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
       <View style={GlobalStyles.headerContainer}>
         <Text style={[Typography.h1, { color: themeColors.text }]}>Cài đặt</Text>
       </View>
@@ -74,6 +75,6 @@ export const ProfileScreen = () => {
           />
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };

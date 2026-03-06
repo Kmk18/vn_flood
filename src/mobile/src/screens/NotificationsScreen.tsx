@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, useColorScheme } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useAlertStore, Alert } from '../store/useAlertStore';
@@ -30,7 +31,7 @@ export const NotificationsScreen = () => {
   );
 
   return (
-    <View style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
       <Text style={[GlobalStyles.headerContainer, GlobalStyles.headerTitleCenter, Typography.h1, { color: themeColors.text }]}>Cảnh báo</Text>
       <ScrollView contentContainerStyle={GlobalStyles.listContainer}>
         {alerts.length === 0 ? (
@@ -41,6 +42,6 @@ export const NotificationsScreen = () => {
           alerts.map(item => <React.Fragment key={item.id}>{renderAlert({ item })}</React.Fragment>)
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
