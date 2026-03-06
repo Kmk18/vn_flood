@@ -13,6 +13,7 @@ export const LoginScreen = () => {
   const isDarkMode = useColorScheme() === 'dark';
   const themeColors = isDarkMode ? Colors.dark : Colors.light;
   const login = useAuthStore((state) => state.login);
+  const accounts = useAuthStore((state) => state.accounts);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +30,12 @@ export const LoginScreen = () => {
     }
     
     setError('');
-    login(email);
+    const result = login(email, password);
+    if (!result.success) {
+      setError(result.error || 'Đăng nhập thất bại. Vui lòng thử lại.');
+      return;
+    }
+
     if (navigation.canGoBack()) {
       navigation.goBack();
     }
@@ -47,6 +53,9 @@ export const LoginScreen = () => {
         </Text>
         <Text style={[Typography.body1, { color: themeColors.textSecondary, marginBottom: Spacing.xl }]}>
           Đăng nhập để xem dự báo lũ lụt và yêu cầu cứu hộ.
+        </Text>
+        <Text style={[Typography.caption, { color: themeColors.textSecondary, marginBottom: Spacing.m }]}>
+          Tài khoản thử nghiệm: {accounts[0]?.email} / {accounts[0]?.password}
         </Text>
 
         <Input

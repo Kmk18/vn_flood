@@ -33,6 +33,15 @@ export const ProfileScreen = () => {
             <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
               Email: {user?.email || 'Chưa cung cấp email'}
             </Text>
+            <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
+              Số điện thoại: {user?.phone || 'Chưa cập nhật'}
+            </Text>
+            <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
+              Khu vực: {user?.district || 'Chưa cập nhật'}
+            </Text>
+            <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
+              Liên hệ khẩn cấp: {user?.emergencyContact || 'Chưa cập nhật'}
+            </Text>
           </>
         ) : (
           <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
