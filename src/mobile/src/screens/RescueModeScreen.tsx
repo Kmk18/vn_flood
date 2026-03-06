@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, useColorScheme } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../theme';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -33,7 +34,7 @@ export const RescueModeScreen = () => {
   );
 
   return (
-    <View style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
       <View style={[GlobalStyles.headerContainer, { backgroundColor: themeColors.danger, paddingBottom: Spacing.l }]}>
         <Text style={[Typography.h2, { color: '#FFF' }]}>Chế độ Cứu hộ Khẩn cấp</Text>
         <Text style={[Typography.body2, { color: '#FFF', marginTop: Spacing.xs }]}>
@@ -44,6 +45,6 @@ export const RescueModeScreen = () => {
       <ScrollView contentContainerStyle={GlobalStyles.listContainer}>
         {mockRescuePoints.map((item) => <React.Fragment key={item.id}>{renderRescuePoint({ item })}</React.Fragment>)}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };

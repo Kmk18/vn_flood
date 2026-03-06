@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, useColorScheme } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -35,10 +36,11 @@ export const LoginScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={[GlobalStyles.container, { backgroundColor: themeColors.background }]} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+      <KeyboardAvoidingView 
+        style={GlobalStyles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <View style={GlobalStyles.centeredContent}>
         <Text style={[Typography.h1, { color: themeColors.text, marginBottom: Spacing.s }]}>
           VNFlood
@@ -82,6 +84,7 @@ export const LoginScreen = () => {
           />
         </View>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };

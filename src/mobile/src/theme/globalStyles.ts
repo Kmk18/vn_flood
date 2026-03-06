@@ -27,7 +27,7 @@ export const GlobalStyles = StyleSheet.create({
   // -------------------------
   headerContainer: {
     paddingHorizontal: Spacing.l,
-    paddingTop: 60,
+    paddingTop: Spacing.xl,
     paddingBottom: Spacing.m,
   },
   headerTitleCenter: {
@@ -90,7 +90,7 @@ export const GlobalStyles = StyleSheet.create({
   },
   mapLayerControls: {
     position: 'absolute',
-    top: 50,
+    top: Spacing.xl * 2,
     right: Spacing.m,
   },
   mapControlButton: {

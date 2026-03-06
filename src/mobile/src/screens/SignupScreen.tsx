@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, useColorScheme, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Colors, Spacing, Typography } from '../theme';
@@ -32,10 +33,11 @@ export const SignupScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={[GlobalStyles.container, { backgroundColor: themeColors.background }]} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+      <KeyboardAvoidingView 
+        style={GlobalStyles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <ScrollView contentContainerStyle={GlobalStyles.scrollContent}>
         <Text style={[Typography.h1, { color: themeColors.text, marginBottom: Spacing.s }]}>
           Tạo tài khoản
@@ -87,6 +89,7 @@ export const SignupScreen = () => {
           />
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
