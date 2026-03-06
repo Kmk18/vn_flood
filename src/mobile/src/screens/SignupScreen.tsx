@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, useColorScheme, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Colors, Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
+import { useAuthStore } from '../store/useAuthStore';
 
 export const SignupScreen = () => {
+  const navigation = useNavigation();
   const isDarkMode = useColorScheme() === 'dark';
   const themeColors = isDarkMode ? Colors.dark : Colors.light;
+  const signup = useAuthStore((state) => state.signup);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -30,6 +34,15 @@ export const SignupScreen = () => {
     }
     
     setError('');
+    const result = signup(name, email, password);
+    if (!result.success) {
+      setError(result.error || 'Đăng ký thất bại. Vui lòng thử lại.');
+      return;
+    }
+
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
   };
 
   return (
@@ -83,7 +96,7 @@ export const SignupScreen = () => {
           <Button 
             title="Quay lại Đăng nhập" 
             variant="secondary" 
-            onPress={() => {}} 
+            onPress={() => navigation.goBack()} 
             isDarkMode={isDarkMode} 
             style={{ marginTop: Spacing.m }}
           />
