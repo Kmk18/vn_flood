@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
-import type Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 
-export const registerForumRoutes = (app: Express, redis: Redis.Redis) => {
+export const registerForumRoutes = (app: Express, redis: Redis) => {
   // Very simple placeholder list endpoint
   app.get('/api/forum/threads', async (_req: Request, res: Response) => {
     const threads = [
