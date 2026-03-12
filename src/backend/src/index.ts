@@ -4,6 +4,7 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import { createRedisClient } from './redisClient';
+import { testConnection } from './db';
 import { registerFloodRoutes } from './modules/flood/routes';
 import { registerForumRoutes } from './modules/forum/routes';
 
@@ -21,17 +22,15 @@ app.get('/api/ping', (_req, res) => {
 });
 
 app.get('/api/health', async (_req, res) => {
-  let redisOk = false;
-  try {
-    const pong = await redis.ping();
-    redisOk = pong === 'PONG';
-  } catch {
-    redisOk = false;
-  }
+  const [redisOk, dbOk] = await Promise.all([
+    redis.ping().then((p) => p === 'PONG').catch(() => false),
+    testConnection(),
+  ]);
 
   res.json({
     status: 'ok',
-    redis: redisOk ? 'connected' : 'unavailable'
+    redis: redisOk ? 'connected' : 'unavailable',
+    db: dbOk ? 'connected' : 'unavailable',
   });
 });
 
