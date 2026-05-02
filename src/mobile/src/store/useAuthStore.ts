@@ -1,54 +1,82 @@
 import { create } from 'zustand';
-import { mockAccounts, MockAccount } from '../mock/accounts';
+import { authApi } from '../api/auth';
+import { usersApi } from '../api/users';
+import { saveTokens, clearTokens, getAccessToken } from '../api/client';
+
+export interface User {
+  id: number;
+  email: string;
+  name: string | null;
+  role: string;
+  province: string | null;
+}
 
 interface AuthState {
   isAuthenticated: boolean;
-  user: MockAccount | null;
-  accounts: MockAccount[];
-  login: (email: string, password: string) => { success: boolean; error?: string };
-  signup: (name: string, email: string, password: string) => { success: boolean; error?: string };
-  logout: () => void;
+  user: User | null;
+  isLoading: boolean;
+  hydrate: () => Promise<void>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  updateUser: (updated: Partial<User>) => void;
+  logout: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   user: null,
-  accounts: mockAccounts,
-  login: (email, password) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const matchedAccount = mockAccounts.find(
-      (account) => account.email.toLowerCase() === normalizedEmail && account.password === password
-    );
+  isLoading: false,
 
-    if (!matchedAccount) {
-      return { success: false, error: 'Email hoặc mật khẩu không đúng.' };
+  hydrate: async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const user = await usersApi.getMe();
+      set({ isAuthenticated: true, user });
+    } catch {
+      await clearTokens();
     }
-
-    set({ isAuthenticated: true, user: matchedAccount });
-    return { success: true };
   },
-  signup: (name, email, password) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedName = name.trim();
 
-    const accountExists = mockAccounts.some((account) => account.email.toLowerCase() === normalizedEmail);
-    if (accountExists) {
-      return { success: false, error: 'Email đã tồn tại. Vui lòng dùng email khác.' };
+  login: async (email, password) => {
+    set({ isLoading: true });
+    try {
+      const data = await authApi.login(email, password);
+      await saveTokens(data.accessToken, data.refreshToken);
+      set({ isAuthenticated: true, user: data.user, isLoading: false });
+      return { success: true };
+    } catch (err: any) {
+      set({ isLoading: false });
+      const msg =
+        err.response?.data?.error === 'Invalid email or password'
+          ? 'Email hoặc mật khẩu không đúng.'
+          : 'Đăng nhập thất bại. Vui lòng thử lại.';
+      return { success: false, error: msg };
     }
-
-    const newAccount: MockAccount = {
-      id: (mockAccounts.length + 1).toString(),
-      name: normalizedName,
-      email: normalizedEmail,
-      phone: '',
-      district: '',
-      emergencyContact: '',
-      password,
-    };
-
-    mockAccounts.push(newAccount);
-    set({ isAuthenticated: true, user: newAccount, accounts: [...mockAccounts] });
-    return { success: true };
   },
-  logout: () => set({ isAuthenticated: false, user: null }),
+
+  signup: async (name, email, password) => {
+    set({ isLoading: true });
+    try {
+      const data = await authApi.register(email, password, name);
+      await saveTokens(data.accessToken, data.refreshToken);
+      set({ isAuthenticated: true, user: data.user, isLoading: false });
+      return { success: true };
+    } catch (err: any) {
+      set({ isLoading: false });
+      const msg =
+        err.response?.data?.error === 'Email already registered'
+          ? 'Email đã tồn tại. Vui lòng dùng email khác.'
+          : 'Đăng ký thất bại. Vui lòng thử lại.';
+      return { success: false, error: msg };
+    }
+  },
+
+  updateUser: (updated) =>
+    set((state) => ({ user: state.user ? { ...state.user, ...updated } : null })),
+
+  logout: async () => {
+    await clearTokens();
+    set({ isAuthenticated: false, user: null });
+  },
 }));
