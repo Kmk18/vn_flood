@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
-import type Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 
-export const registerFloodRoutes = (app: Express, redis: Redis.Redis) => {
+export const registerFloodRoutes = (app: Express, redis: Redis) => {
   // Placeholder: will use AI service + Redis caching later
   app.get('/api/flood/preview', async (_req: Request, res: Response) => {
     const mock = {
