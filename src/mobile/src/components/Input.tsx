@@ -9,26 +9,27 @@ interface InputProps extends TextInputProps {
   isDarkMode?: boolean;
 }
 
-export const Input: React.FC<InputProps> = React.memo(({ 
-  label, error, isDarkMode = false, style, ...props 
+export const Input: React.FC<InputProps> = React.memo(({
+  label, error, isDarkMode = false, style, ...props
 }) => {
   const themeColors = isDarkMode ? Colors.dark : Colors.light;
 
   return (
     <View style={GlobalStyles.inputContainer}>
-      <Text style={[Typography.body2, { color: themeColors.textSecondary, marginBottom: Spacing.xs }]}>
-        {label}
-      </Text>
+      {label ? (
+        <Text style={[Typography.label, { color: themeColors.textSecondary, marginBottom: Spacing.xs }]}>
+          {label.toUpperCase()}
+        </Text>
+      ) : null}
       <TextInput
         style={[
           GlobalStyles.inputField,
           Typography.body1,
-          { 
+          {
             color: themeColors.text,
-            backgroundColor: themeColors.card,
-            borderColor: error ? themeColors.danger : themeColors.border,
+            borderBottomColor: error ? themeColors.danger : themeColors.border,
           },
-          style
+          style,
         ]}
         placeholderTextColor={themeColors.textSecondary}
         {...props}

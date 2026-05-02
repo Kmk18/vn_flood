@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { Spacing } from './index'; // import from our theme index
+import { Spacing } from './index';
 
 export const GlobalStyles = StyleSheet.create({
   // -------------------------
@@ -21,7 +21,7 @@ export const GlobalStyles = StyleSheet.create({
   screenPadding: {
     paddingHorizontal: Spacing.m,
   },
-  
+
   // -------------------------
   // Headers
   // -------------------------
@@ -33,13 +33,12 @@ export const GlobalStyles = StyleSheet.create({
   headerTitleCenter: {
     textAlign: 'center',
   },
-  
+
   // -------------------------
   // Core Components
   // -------------------------
   button: {
     height: 50,
-    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Spacing.m,
@@ -52,28 +51,25 @@ export const GlobalStyles = StyleSheet.create({
     marginVertical: Spacing.s,
   },
   inputField: {
-    height: 50,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: Spacing.m,
+    height: 48,
+    borderBottomWidth: 1.5,
+    paddingHorizontal: 0,
+    paddingVertical: Spacing.s,
   },
   card: {
-    borderRadius: 12,
-    borderWidth: 1,
     padding: Spacing.m,
     marginVertical: Spacing.s,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
-  
+
   // -------------------------
   // Lists
   // -------------------------
   listContainer: {
-    paddingHorizontal: Spacing.m,
     paddingBottom: Spacing.xl,
   },
   listItemHeader: {
@@ -100,12 +96,12 @@ export const GlobalStyles = StyleSheet.create({
   mapHelpButtonContainer: {
     position: 'absolute',
     bottom: Spacing.xl,
-    left: Spacing.l,
-    right: Spacing.l,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing.l,
   },
   mapHelpButton: {
-    height: 60,
-    borderRadius: 30,
+    height: 56,
     elevation: 5,
     shadowColor: '#000',
     shadowOpacity: 0.3,
@@ -119,23 +115,19 @@ export const GlobalStyles = StyleSheet.create({
   chatMessageBubble: {
     maxWidth: '85%',
     padding: Spacing.m,
-    borderRadius: 12,
     marginBottom: Spacing.m,
   },
   chatBotBubble: {
     alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderBottomLeftRadius: 0,
   },
   chatUserBubble: {
     alignSelf: 'flex-end',
-    borderBottomRightRadius: 0,
   },
   chatSourcesContainer: {
     marginTop: Spacing.s,
     paddingTop: Spacing.s,
-    borderTopWidth: 0.5,
-    borderTopColor: '#CCC',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
   },
   chatInputContainer: {
     flexDirection: 'row',

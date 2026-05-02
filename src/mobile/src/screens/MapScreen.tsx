@@ -17,9 +17,7 @@ export const MapScreen = () => {
   const { basins, selectedBasin, filterMinRisk, setSelectedBasin, setFilterMinRisk } = useFloodStore();
 
   const minOrder = RISK_ORDER.indexOf(filterMinRisk);
-  const visibleBasins = basins.filter(
-    (b) => RISK_ORDER.indexOf(b.riskLevel) >= minOrder
-  );
+  const visibleBasins = basins.filter((b) => RISK_ORDER.indexOf(b.riskLevel) >= minOrder);
 
   return (
     <View style={GlobalStyles.container}>
@@ -48,10 +46,13 @@ export const MapScreen = () => {
             <TouchableOpacity
               key={risk}
               onPress={() => setFilterMinRisk(risk)}
-              style={[styles.chip, { backgroundColor: active ? RISK_COLORS[risk] : themeColors.card, borderColor: RISK_COLORS[risk] }]}
+              style={[
+                styles.chip,
+                { backgroundColor: active ? RISK_COLORS[risk] : themeColors.card },
+              ]}
             >
-              <Text style={[Typography.caption, { color: active ? '#fff' : RISK_COLORS[risk], fontWeight: '600' }]}>
-                {RISK_LABELS[risk]}+
+              <Text style={[Typography.label, { color: active ? '#fff' : RISK_COLORS[risk] }]}>
+                {RISK_LABELS[risk].toUpperCase()}+
               </Text>
             </TouchableOpacity>
           );
@@ -61,43 +62,52 @@ export const MapScreen = () => {
       {/* Basin detail panel */}
       {selectedBasin && (
         <View style={[styles.panel, { backgroundColor: themeColors.card }]}>
-          <View style={styles.panelHeader}>
-            <View style={[styles.riskBadge, { backgroundColor: RISK_COLORS[selectedBasin.riskLevel] }]}>
-              <Text style={styles.riskBadgeText}>{RISK_LABELS[selectedBasin.riskLevel].toUpperCase()}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setSelectedBasin(null)}>
-              <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={[Typography.h3, { color: themeColors.text, marginBottom: Spacing.xs }]}>
-            {selectedBasin.province}
-          </Text>
-          <Text style={[Typography.body1, { color: themeColors.textSecondary, marginBottom: Spacing.m }]}>
-            Xác suất lũ hôm nay: {(selectedBasin.floodProb * 100).toFixed(0)}%
-          </Text>
-
-          {/* 7-day mini forecast */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {selectedBasin.forecast7d.map((f, i) => (
-              <View key={i} style={styles.forecastDay}>
-                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
-                  {i === 0 ? 'Hôm nay' : new Date(f.forecastDate).toLocaleDateString('vi-VN', { weekday: 'short' })}
+          <View style={[styles.panelAccent, { backgroundColor: RISK_COLORS[selectedBasin.riskLevel] }]} />
+          <View style={styles.panelContent}>
+            <View style={styles.panelHeader}>
+              <View>
+                <Text style={[Typography.label, { color: RISK_COLORS[selectedBasin.riskLevel] }]}>
+                  {RISK_LABELS[selectedBasin.riskLevel].toUpperCase()}
                 </Text>
-                <View style={[styles.forecastDot, { backgroundColor: RISK_COLORS[f.riskLevel as RiskLevel] ?? '#ccc' }]} />
-                <Text style={[Typography.caption, { color: themeColors.text, fontWeight: '600' }]}>
-                  {(f.floodProb * 100).toFixed(0)}%
+                <Text style={[Typography.h3, { color: themeColors.text, marginTop: 2 }]}>
+                  {selectedBasin.province}
                 </Text>
               </View>
-            ))}
-          </ScrollView>
+              <TouchableOpacity onPress={() => setSelectedBasin(null)} style={styles.closeBtn}>
+                <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[Typography.body2, { color: themeColors.textSecondary, marginTop: Spacing.xs }]}>
+              Xác suất lũ hôm nay:{' '}
+              <Text style={{ color: RISK_COLORS[selectedBasin.riskLevel], fontWeight: '700' }}>
+                {(selectedBasin.floodProb * 100).toFixed(0)}%
+              </Text>
+            </Text>
+
+            <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {selectedBasin.forecast7d.map((f, i) => (
+                <View key={i} style={styles.forecastDay}>
+                  <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
+                    {i === 0 ? 'HÔM NAY' : new Date(f.forecastDate).toLocaleDateString('vi-VN', { weekday: 'short' }).toUpperCase()}
+                  </Text>
+                  <View style={[styles.forecastBar, { backgroundColor: RISK_COLORS[f.riskLevel as RiskLevel] ?? '#ccc' }]} />
+                  <Text style={[Typography.caption, { color: themeColors.text, fontWeight: '700' }]}>
+                    {(f.floodProb * 100).toFixed(0)}%
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
         </View>
       )}
 
       {/* Rescue button */}
       <View style={GlobalStyles.mapHelpButtonContainer}>
         <TouchableOpacity
-          style={styles.rescueButton}
+          style={[styles.rescueButton, { backgroundColor: themeColors.danger }]}
           onPress={() => navigation.navigate('RescueMode')}
         >
           <Text style={styles.rescueButtonText}>YÊU CẦU CỨU HỘ</Text>
@@ -118,65 +128,67 @@ const styles = StyleSheet.create({
   },
   chip: {
     paddingHorizontal: Spacing.m,
-    paddingVertical: Spacing.xs,
-    borderRadius: 999,
-    borderWidth: 1.5,
+    paddingVertical: Spacing.s,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   panel: {
     position: 'absolute',
     bottom: 100,
-    left: Spacing.m,
-    right: Spacing.m,
-    borderRadius: 16,
-    padding: Spacing.m,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 10,
+  },
+  panelAccent: {
+    width: 4,
+  },
+  panelContent: {
+    flex: 1,
+    padding: Spacing.m,
   },
   panelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.s,
+    alignItems: 'flex-start',
   },
-  riskBadge: {
-    paddingHorizontal: Spacing.s,
-    paddingVertical: 2,
-    borderRadius: 6,
+  closeBtn: {
+    padding: Spacing.xs,
   },
-  riskBadgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+  divider: {
+    height: 1,
+    marginVertical: Spacing.m,
   },
   forecastDay: {
     alignItems: 'center',
     marginRight: Spacing.m,
     gap: 4,
   },
-  forecastDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  forecastBar: {
+    width: 4,
+    height: 20,
   },
   rescueButton: {
-    backgroundColor: '#E74C3C',
-    paddingVertical: Spacing.m,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: 999,
-    shadowColor: '#E74C3C',
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#C8171A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 8,
   },
   rescueButtonText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 15,
-    letterSpacing: 1,
+    fontWeight: '800',
+    fontSize: 14,
+    letterSpacing: 1.5,
   },
 });

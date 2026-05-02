@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Switch, useColorScheme } from 'react-native';
+import { View, Text, Switch, useColorScheme, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Colors, Spacing, Typography } from '../theme';
@@ -21,53 +21,64 @@ export const ProfileScreen = () => {
         <Text style={[Typography.h1, { color: themeColors.text }]}>Cài đặt</Text>
       </View>
 
-      <View style={GlobalStyles.profileSection}>
-        <Text style={[Typography.h3, { color: themeColors.text, marginBottom: Spacing.s }]}>
-          Tài khoản
-        </Text>
+      {/* Account section */}
+      <Text style={[styles.sectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
+        TÀI KHOẢN
+      </Text>
+      <View style={[styles.section, { backgroundColor: themeColors.card }]}>
         {isAuthenticated ? (
           <>
-            <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
-              Tên: {user?.name || 'Chưa cập nhật'}
-            </Text>
-            <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
-              Email: {user?.email}
-            </Text>
-            <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
-              Tỉnh / Thành phố: {user?.province || 'Chưa cập nhật'}
-            </Text>
-            <Button
-              title="Chỉnh sửa hồ sơ"
-              variant="secondary"
-              onPress={() => navigation.navigate('EditProfile')}
-              isDarkMode={isDarkMode}
-              style={{ marginTop: Spacing.m }}
-            />
+            <View style={styles.fieldRow}>
+              <Text style={[Typography.label, { color: themeColors.textSecondary }]}>TÊN</Text>
+              <Text style={[Typography.body1, { color: themeColors.text }]}>{user?.name || 'Chưa cập nhật'}</Text>
+            </View>
+            <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
+            <View style={styles.fieldRow}>
+              <Text style={[Typography.label, { color: themeColors.textSecondary }]}>EMAIL</Text>
+              <Text style={[Typography.body1, { color: themeColors.text }]}>{user?.email}</Text>
+            </View>
+            <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
+            <View style={styles.fieldRow}>
+              <Text style={[Typography.label, { color: themeColors.textSecondary }]}>TỈNH / TP</Text>
+              <Text style={[Typography.body1, { color: themeColors.text }]}>{user?.province || 'Chưa cập nhật'}</Text>
+            </View>
           </>
         ) : (
-          <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>
+          <Text style={[Typography.body1, { color: themeColors.textSecondary, padding: Spacing.s }]}>
             Bạn đang sử dụng ứng dụng với tư cách khách.
           </Text>
         )}
       </View>
 
-      <View style={[GlobalStyles.profileSection, { borderTopWidth: 1, borderTopColor: themeColors.border }]}>
-        <Text style={[Typography.h3, { color: themeColors.text, marginBottom: Spacing.m }]}>
-          Tùy chọn
-        </Text>
+      {isAuthenticated && (
+        <View style={{ paddingHorizontal: Spacing.l, marginTop: Spacing.s }}>
+          <Button
+            title="Chỉnh sửa hồ sơ"
+            variant="secondary"
+            onPress={() => navigation.navigate('EditProfile')}
+            isDarkMode={isDarkMode}
+          />
+        </View>
+      )}
 
-        <View style={GlobalStyles.profileSettingRow}>
-          <Text style={[Typography.body1, { color: themeColors.text }]}>Chia sẻ Vị trí</Text>
+      {/* Preferences section */}
+      <Text style={[styles.sectionLabel, Typography.label, { color: themeColors.textSecondary, marginTop: Spacing.l }]}>
+        TÙY CHỌN
+      </Text>
+      <View style={[styles.section, { backgroundColor: themeColors.card }]}>
+        <View style={[styles.fieldRow, { alignItems: 'center' }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[Typography.body1, { color: themeColors.text }]}>Chia sẻ Vị trí</Text>
+            <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: 2 }]}>
+              Giúp đội cứu hộ tìm thấy bạn nhanh hơn
+            </Text>
+          </View>
           <Switch
             value={locationSharing}
             onValueChange={setLocationSharing}
             trackColor={{ false: themeColors.border, true: themeColors.success }}
           />
         </View>
-
-        <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: Spacing.xs }]}>
-          Bật chia sẻ vị trí giúp đội cứu hộ tìm thấy bạn nhanh hơn trong trường hợp khẩn cấp.
-        </Text>
       </View>
 
       <View style={GlobalStyles.profileLogoutContainer}>
@@ -84,3 +95,28 @@ export const ProfileScreen = () => {
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  sectionLabel: {
+    paddingHorizontal: Spacing.l,
+    paddingBottom: Spacing.s,
+  },
+  section: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.l,
+    paddingVertical: Spacing.m,
+    gap: Spacing.m,
+  },
+  divider: {
+    height: 1,
+    marginHorizontal: Spacing.l,
+  },
+});

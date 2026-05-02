@@ -1,28 +1,28 @@
 export const Colors = {
   light: {
-    background: '#FFFFFF',
-    text: '#000000',
-    primary: '#0052CC',
-    secondary: '#F4F5F7',
-    danger: '#FF5630',
-    warning: '#FFAB00',
-    success: '#36B37E',
-    border: '#DFE1E6',
+    background: '#F5F7FA',
+    text: '#0D1117',
+    primary: '#1A4ED8',
+    secondary: '#EDF0F5',
+    danger: '#C8171A',
+    warning: '#D97706',
+    success: '#15803D',
+    border: '#D8DCE3',
     card: '#FFFFFF',
-    textSecondary: '#5E6C84',
+    textSecondary: '#5C6470',
   },
   dark: {
-    background: '#121212',
-    text: '#FFFFFF',
-    primary: '#4C9AFF',
-    secondary: '#202124',
-    danger: '#FF8F73',
-    warning: '#FFC400',
-    success: '#57D9A3',
-    border: '#2C2D30',
-    card: '#1E1E1E',
-    textSecondary: '#A0AABF',
-  }
+    background: '#0D1117',
+    text: '#E6ECF3',
+    primary: '#4B7CF4',
+    secondary: '#161B25',
+    danger: '#F04040',
+    warning: '#F59E0B',
+    success: '#22C55E',
+    border: '#1E2533',
+    card: '#131820',
+    textSecondary: '#8892A4',
+  },
 };
 
 export const Spacing = {
@@ -35,11 +35,12 @@ export const Spacing = {
 };
 
 export const Typography = {
-  h1: { fontSize: 32, fontWeight: 'bold' as const },
-  h2: { fontSize: 24, fontWeight: 'bold' as const },
-  h3: { fontSize: 20, fontWeight: '600' as const },
-  body1: { fontSize: 16 },
-  body2: { fontSize: 14 },
-  caption: { fontSize: 12 },
-  button: { fontSize: 16, fontWeight: 'bold' as const },
+  h1: { fontSize: 36, fontWeight: '800' as const, letterSpacing: -0.5 },
+  h2: { fontSize: 26, fontWeight: '700' as const },
+  h3: { fontSize: 17, fontWeight: '700' as const },
+  body1: { fontSize: 15 },
+  body2: { fontSize: 13 },
+  caption: { fontSize: 11 },
+  label: { fontSize: 11, fontWeight: '700' as const, letterSpacing: 0.8 },
+  button: { fontSize: 14, fontWeight: '700' as const, letterSpacing: 0.6 },
 };

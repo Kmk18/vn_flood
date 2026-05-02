@@ -1,9 +1,7 @@
 import React from 'react';
-import { View, Text, ScrollView, useColorScheme } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useColorScheme, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../theme';
-import { Card } from '../components/Card';
-import { Button } from '../components/Button';
 import { GlobalStyles } from '../theme/globalStyles';
 
 const mockRescuePoints = [
@@ -16,35 +14,82 @@ export const RescueModeScreen = () => {
   const isDarkMode = useColorScheme() === 'dark';
   const themeColors = isDarkMode ? Colors.dark : Colors.light;
 
-  const renderRescuePoint = ({ item }: { item: typeof mockRescuePoints[0] }) => (
-    <Card isDarkMode={isDarkMode} style={{ marginBottom: Spacing.m }}>
-      <Text style={[Typography.h3, { color: themeColors.text }]}>{item.name}</Text>
-      <Text style={[Typography.body2, { color: themeColors.textSecondary, marginTop: Spacing.xs }]}>
-        Khoảng cách: {item.distance}
-      </Text>
-      <Text style={[Typography.body2, { color: themeColors.textSecondary }]}>
-        Sức chứa: {item.capacity}
-      </Text>
-      <Button 
-        title="Chỉ đường đến đây" 
-        onPress={() => {}} 
-        style={{ marginTop: Spacing.m, height: 40 }}
-      />
-    </Card>
-  );
-
   return (
     <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
-      <View style={[GlobalStyles.headerContainer, { backgroundColor: themeColors.danger, paddingBottom: Spacing.l }]}>
-        <Text style={[Typography.h2, { color: '#FFF' }]}>Chế độ Cứu hộ Khẩn cấp</Text>
-        <Text style={[Typography.body2, { color: '#FFF', marginTop: Spacing.xs }]}>
-          Tín hiệu báo nguy của bạn đã được kích hoạt. Hãy di chuyển đến khu vực an toàn gần nhất.
+      <View style={[styles.header, { backgroundColor: themeColors.danger }]}>
+        <Text style={[Typography.label, { color: 'rgba(255,255,255,0.7)', marginBottom: Spacing.xs }]}>
+          CHẾ ĐỘ KHẨN CẤP
+        </Text>
+        <Text style={[Typography.h2, { color: '#FFF' }]}>Cứu hộ đang đến</Text>
+        <Text style={[Typography.body2, { color: 'rgba(255,255,255,0.85)', marginTop: Spacing.xs }]}>
+          Tín hiệu báo nguy đã được gửi. Di chuyển đến điểm an toàn gần nhất.
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={GlobalStyles.listContainer}>
-        {mockRescuePoints.map((item) => <React.Fragment key={item.id}>{renderRescuePoint({ item })}</React.Fragment>)}
+      <Text style={[styles.sectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
+        ĐIỂM SƠ TÁN GẦN BẠN
+      </Text>
+
+      <ScrollView contentContainerStyle={{ paddingBottom: Spacing.xl }}>
+        {mockRescuePoints.map((item, index) => (
+          <View
+            key={item.id}
+            style={[
+              styles.row,
+              { backgroundColor: themeColors.card },
+              index < mockRescuePoints.length - 1 && { borderBottomWidth: 1, borderBottomColor: themeColors.border },
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <Text style={[Typography.h3, { color: themeColors.text }]}>{item.name}</Text>
+              <View style={styles.meta}>
+                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
+                  {item.distance}
+                </Text>
+                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>·</Text>
+                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
+                  Sức chứa: {item.capacity}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity style={[styles.dirBtn, { backgroundColor: themeColors.primary }]} onPress={() => {}}>
+              <Text style={[Typography.label, { color: '#fff' }]}>CHỈ ĐƯỜNG</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: Spacing.l,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.l,
+  },
+  sectionLabel: {
+    paddingHorizontal: Spacing.l,
+    paddingTop: Spacing.l,
+    paddingBottom: Spacing.s,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.l,
+    paddingVertical: Spacing.m,
+  },
+  rowLeft: {
+    flex: 1,
+    marginRight: Spacing.m,
+  },
+  meta: {
+    flexDirection: 'row',
+    gap: Spacing.s,
+    marginTop: Spacing.xs,
+  },
+  dirBtn: {
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+  },
+});

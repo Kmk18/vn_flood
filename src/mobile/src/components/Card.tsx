@@ -5,7 +5,7 @@ import { GlobalStyles } from '../theme/globalStyles';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: ViewStyle | ViewStyle[];
   isDarkMode?: boolean;
 }
 
@@ -13,14 +13,7 @@ export const Card: React.FC<CardProps> = React.memo(({ children, style, isDarkMo
   const themeColors = isDarkMode ? Colors.dark : Colors.light;
 
   return (
-    <View style={[
-      GlobalStyles.card, 
-      { 
-        backgroundColor: themeColors.card,
-        borderColor: themeColors.border,
-      },
-      style
-    ]}>
+    <View style={[GlobalStyles.card, { backgroundColor: themeColors.card }, style]}>
       {children}
     </View>
   );
