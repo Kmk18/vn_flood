@@ -16,6 +16,12 @@ const port = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
+app.use((req, _res, next) => {
+  // eslint-disable-next-line no-console
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
 const redis = createRedisClient();
 
 // Simple test endpoint

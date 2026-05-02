@@ -6,19 +6,22 @@ import { hashPassword, verifyPassword } from '../../lib/password';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt';
 
 const registerSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   name: z.string().min(1).optional(),
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(1),
 });
 
 const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });
+
+const log = (event: string, detail: Record<string, unknown>) =>
+  console.log(`[auth] ${event}`, { ...detail, ts: new Date().toISOString() });
 
 export const registerAuthRoutes = (app: Express) => {
   app.post('/api/auth/register', async (req: Request, res: Response) => {
@@ -36,22 +39,30 @@ export const registerAuthRoutes = (app: Express) => {
       .limit(1);
 
     if (existing.length > 0) {
+      log('register:conflict', { email });
       res.status(409).json({ error: 'Email already registered' });
       return;
     }
 
-    const passwordHash = await hashPassword(password);
-    const [user] = await db
-      .insert(users)
-      .values({ email, passwordHash, name })
-      .returning({ id: users.id, email: users.email, role: users.role, name: users.name });
+    try {
+      const passwordHash = await hashPassword(password);
+      const [user] = await db
+        .insert(users)
+        .values({ email, passwordHash, name })
+        .returning({ id: users.id, email: users.email, role: users.role, name: users.name });
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
-    res.status(201).json({
-      user,
-      accessToken: signAccessToken(payload),
-      refreshToken: signRefreshToken(payload),
-    });
+      log('register:ok', { userId: user.id, email });
+      const payload = { sub: user.id, email: user.email, role: user.role };
+      res.status(201).json({
+        user,
+        accessToken: signAccessToken(payload),
+        refreshToken: signRefreshToken(payload),
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[auth] register:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 
   app.post('/api/auth/login', async (req: Request, res: Response) => {
@@ -69,10 +80,12 @@ export const registerAuthRoutes = (app: Express) => {
       .limit(1);
 
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
+      log('login:fail', { email });
       res.status(401).json({ error: 'Invalid email or password' });
       return;
     }
 
+    log('login:ok', { userId: user.id, email });
     const payload = { sub: user.id, email: user.email, role: user.role };
     res.json({
       user: { id: user.id, email: user.email, role: user.role, name: user.name },
@@ -89,10 +102,12 @@ export const registerAuthRoutes = (app: Express) => {
     }
     try {
       const payload = verifyRefreshToken(result.data.refreshToken);
+      log('refresh:ok', { userId: payload.sub, email: payload.email });
       res.json({
         accessToken: signAccessToken({ sub: payload.sub, email: payload.email, role: payload.role }),
       });
     } catch {
+      log('refresh:fail', {});
       res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
   });
