@@ -5,6 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import { createRedisClient } from './redisClient';
 import { testConnection } from './db';
+import { registerAuthRoutes } from './modules/auth/routes';
 import { registerFloodRoutes } from './modules/flood/routes';
 import { registerForumRoutes } from './modules/forum/routes';
 
@@ -34,6 +35,7 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
+registerAuthRoutes(app);
 registerFloodRoutes(app, redis);
 registerForumRoutes(app, redis);
 
