@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, useColorScheme, StyleSheet } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Colors, Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useFloodStore, RISK_COLORS, RISK_LABELS, RiskLevel } from '../store/useFloodStore';
@@ -11,7 +10,6 @@ const RISK_ORDER: RiskLevel[] = ['low', 'medium', 'high', 'critical'];
 const VIETNAM_REGION = { latitude: 16.0, longitude: 107.5, latitudeDelta: 13.0, longitudeDelta: 9.0 };
 
 export const MapScreen = () => {
-  const navigation = useNavigation<NavigationProp<any>>();
   const isDarkMode = useColorScheme() === 'dark';
   const themeColors = isDarkMode ? Colors.dark : Colors.light;
 
@@ -158,17 +156,6 @@ export const MapScreen = () => {
         </View>
       )}
 
-      {/* ── Rescue button ── */}
-      {!selectedBasin && !showSettings && (
-        <View style={GlobalStyles.mapHelpButtonContainer}>
-          <TouchableOpacity
-            style={[styles.rescueButton, { backgroundColor: themeColors.danger }]}
-            onPress={() => navigation.navigate('RescueMode')}
-          >
-            <Text style={styles.rescueButtonText}>YÊU CẦU CỨU HỘ</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {/* ── Settings backdrop ── */}
       {showSettings && (
@@ -392,23 +379,6 @@ const styles = StyleSheet.create({
     height: 20,
   },
 
-  // Rescue
-  rescueButton: {
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#C8171A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  rescueButtonText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 14,
-    letterSpacing: 1.5,
-  },
 
   // Settings
   backdrop: {
