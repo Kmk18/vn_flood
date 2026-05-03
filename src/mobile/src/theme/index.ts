@@ -2,7 +2,7 @@ export const Colors = {
   light: {
     background: '#F5F7FA',
     text: '#0D1117',
-    primary: '#1A4ED8',
+    primary: '#FF4B33',
     secondary: '#EDF0F5',
     danger: '#C8171A',
     warning: '#D97706',
@@ -14,7 +14,7 @@ export const Colors = {
   dark: {
     background: '#0D1117',
     text: '#E6ECF3',
-    primary: '#4B7CF4',
+    primary: '#FF6B55',
     secondary: '#161B25',
     danger: '#F04040',
     warning: '#F59E0B',
