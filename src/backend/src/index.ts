@@ -42,7 +42,7 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
-registerAuthRoutes(app);
+registerAuthRoutes(app, redis);
 registerUserRoutes(app);
 registerFloodRoutes(app, redis);
 registerForumRoutes(app, redis);

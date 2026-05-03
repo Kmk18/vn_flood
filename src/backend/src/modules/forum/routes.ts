@@ -1,18 +1,8 @@
 import type { Express, Request, Response } from 'express';
 import type { Redis } from 'ioredis';
 
-export const registerForumRoutes = (app: Express, redis: Redis) => {
-  // Very simple placeholder list endpoint
-  app.get('/api/forum/threads', async (_req: Request, res: Response) => {
-    const threads = [
-      {
-        id: 'example-1',
-        title: 'Framework initialized',
-        body: 'Forum backend routes are ready for future implementation.',
-        createdAt: new Date().toISOString()
-      }
-    ];
-    res.json({ threads });
+export const registerForumRoutes = (app: Express, _redis: Redis) => {
+  app.get('/api/forum/threads', (_req: Request, res: Response) => {
+    res.status(501).json({ error: 'Forum not yet implemented' });
   });
 };
-

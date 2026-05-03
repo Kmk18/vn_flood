@@ -77,6 +77,7 @@ export const rescuePoints = pgTable('rescue_points', {
   isActive: boolean('is_active').notNull().default(true),
 });
 
+
 export const rescueRequests = pgTable('rescue_requests', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id),

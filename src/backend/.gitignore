@@ -1,0 +1,35 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Tests / coverage
+coverage/
+.nyc_output/
+
+# Local databases & dumps
+*.sqlite
+*.sqlite3
+*.db
+dump.sql
+*.dump
+
+# TLS / keys (local dev only)
+*.pem
+*.key
+!**/fixtures/**/*.pem
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,9 +1,11 @@
 import type { Express, Request, Response } from 'express';
+import type { Redis } from 'ioredis';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, users } from '../../db';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt';
+import { createRateLimiter } from '../../middleware/rateLimit';
 
 const registerSchema = z.object({
   email: z.email(),
@@ -23,8 +25,11 @@ const refreshSchema = z.object({
 const log = (event: string, detail: Record<string, unknown>) =>
   console.log(`[auth] ${event}`, { ...detail, ts: new Date().toISOString() });
 
-export const registerAuthRoutes = (app: Express) => {
-  app.post('/api/auth/register', async (req: Request, res: Response) => {
+export const registerAuthRoutes = (app: Express, redis: Redis) => {
+  const registerLimiter = createRateLimiter(redis, { windowSeconds: 3600, maxRequests: 5, keyPrefix: 'rl:register' });
+  const loginLimiter = createRateLimiter(redis, { windowSeconds: 900, maxRequests: 10, keyPrefix: 'rl:login' });
+
+  app.post('/api/auth/register', registerLimiter, async (req: Request, res: Response) => {
     const result = registerSchema.safeParse(req.body);
     if (!result.success) {
       res.status(400).json({ error: result.error.issues });
@@ -65,7 +70,7 @@ export const registerAuthRoutes = (app: Express) => {
     }
   });
 
-  app.post('/api/auth/login', async (req: Request, res: Response) => {
+  app.post('/api/auth/login', loginLimiter, async (req: Request, res: Response) => {
     const result = loginSchema.safeParse(req.body);
     if (!result.success) {
       res.status(400).json({ error: result.error.issues });
