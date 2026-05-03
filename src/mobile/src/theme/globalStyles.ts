@@ -84,15 +84,6 @@ export const GlobalStyles = StyleSheet.create({
   mapAbsolute: {
     ...StyleSheet.absoluteFillObject,
   },
-  mapLayerControls: {
-    position: 'absolute',
-    top: Spacing.xl * 2,
-    right: Spacing.m,
-  },
-  mapControlButton: {
-    paddingHorizontal: Spacing.s,
-    height: 40,
-  },
   mapHelpButtonContainer: {
     position: 'absolute',
     bottom: Spacing.xl,
@@ -100,13 +91,216 @@ export const GlobalStyles = StyleSheet.create({
     right: 0,
     paddingHorizontal: Spacing.l,
   },
-  mapHelpButton: {
-    height: 56,
-    elevation: 5,
+
+  // Search bar row
+  mapSearchRow: {
+    position: 'absolute',
+    top: 52,
+    left: Spacing.m,
+    right: Spacing.m,
+    flexDirection: 'row',
+    gap: Spacing.s,
+  },
+  mapSearchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.m,
+    height: 48,
+    borderRadius: 8,
     shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
+    gap: Spacing.s,
+  },
+  mapSearchIcon: {
+    fontSize: 18,
+  },
+  mapSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    paddingVertical: 0,
+  },
+  mapClearBtn: {
+    fontSize: 14,
+    padding: 2,
+  },
+  mapMenuBtn: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  mapMenuIcon: {
+    fontSize: 22,
+    lineHeight: 26,
+  },
+
+  // Search suggestions
+  mapSuggestions: {
+    position: 'absolute',
+    top: 108,
+    left: Spacing.m,
+    right: Spacing.m + 48 + Spacing.s,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  mapSuggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.m,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.m,
+    borderBottomWidth: 1,
+  },
+  mapSuggestionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    flexShrink: 0,
+  },
+
+  // Basin detail panel
+  mapPanel: {
+    position: 'absolute',
+    bottom: 100,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  mapPanelAccent: {
+    width: 4,
+  },
+  mapPanelContent: {
+    flex: 1,
+    padding: Spacing.m,
+  },
+  mapPanelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  mapCloseBtn: {
+    padding: Spacing.xs,
+  },
+  mapDivider: {
+    height: 1,
+    marginVertical: Spacing.m,
+  },
+  mapForecastDay: {
+    alignItems: 'center',
+    marginRight: Spacing.m,
+    gap: 4,
+  },
+  mapForecastBar: {
+    width: 4,
+    height: 20,
+  },
+
+  // Settings sheet
+  mapBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  mapSettingsSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: Spacing.xl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  mapSheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: Spacing.s,
+    marginBottom: Spacing.s,
+  },
+  mapSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.l,
+    paddingVertical: Spacing.m,
+  },
+  mapSheetSectionLabel: {
+    paddingHorizontal: Spacing.l,
+    paddingBottom: Spacing.s,
+  },
+  mapSheetDivider: {
+    height: 1,
+    marginHorizontal: Spacing.l,
+    marginVertical: Spacing.m,
+  },
+  mapRiskRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.s,
+    paddingHorizontal: Spacing.l,
+    paddingBottom: Spacing.s,
+  },
+  mapRiskChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+  },
+  mapRiskDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  mapLayerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.l,
+    paddingVertical: Spacing.m,
+    borderBottomWidth: 1,
+    gap: Spacing.m,
+  },
+  mapLayerIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  mapLegendRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.l,
+    paddingBottom: Spacing.s,
+    gap: Spacing.l,
+  },
+  mapLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  mapLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 
   // -------------------------

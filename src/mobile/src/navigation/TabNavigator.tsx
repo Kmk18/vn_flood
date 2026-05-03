@@ -16,7 +16,6 @@ const SOSButton = ({ onPress, color }: { onPress: () => void; color: string }) =
     <TouchableOpacity
       style={[styles.sosBtn, { backgroundColor: color }]}
       onPress={onPress}
-      activeOpacity={0.85}
     >
       <Text style={styles.sosBtnText}>SOS</Text>
     </TouchableOpacity>
@@ -96,7 +95,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     shadowColor: '#C8171A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
     shadowRadius: 8,
     elevation: 10,
   },
