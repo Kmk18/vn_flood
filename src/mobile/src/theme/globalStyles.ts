@@ -59,6 +59,18 @@ export const GlobalStyles = StyleSheet.create({
   card: {
     padding: Spacing.m,
     marginVertical: Spacing.s,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginHorizontal: Spacing.m,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,

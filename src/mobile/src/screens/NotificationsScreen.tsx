@@ -20,74 +20,73 @@ export const NotificationsScreen = () => {
   const renderAuthorityAlert = (item: Alert) => (
     <View
       key={item.id}
-      style={[
-        styles.row,
-        { backgroundColor: colors.card },
-        item.isUrgent && { borderLeftWidth: 3, borderLeftColor: colors.danger },
-      ]}
+      style={[styles.alertCard, { backgroundColor: colors.card }]}
     >
-      <View style={GlobalStyles.listItemHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.s, flex: 1 }}>
-          {item.isUrgent && (
-            <Text style={[Typography.label, { color: colors.danger }]}>KHẨN</Text>
-          )}
-          <Text
-            style={[Typography.h3, { color: item.isUrgent ? colors.danger : colors.text, flex: 1 }]}
-            numberOfLines={1}
-          >
-            {item.title}
+      {item.isUrgent && <View style={[styles.urgentAccent, { backgroundColor: colors.danger }]} />}
+      <View style={styles.cardInner}>
+        <View style={GlobalStyles.listItemHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.s, flex: 1 }}>
+            {item.isUrgent && (
+              <Text style={[Typography.label, { color: colors.danger }]}>KHẨN</Text>
+            )}
+            <Text
+              style={[Typography.h3, { color: item.isUrgent ? colors.danger : colors.text, flex: 1 }]}
+              numberOfLines={1}
+            >
+              {item.title}
+            </Text>
+          </View>
+          <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+            {new Date(item.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
-        <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-          {new Date(item.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+        <Text style={[Typography.body2, { color: colors.textSecondary, marginTop: Spacing.s }]}>
+          {item.message}
         </Text>
       </View>
-      <Text style={[Typography.body2, { color: colors.textSecondary, marginTop: Spacing.s }]}>
-        {item.message}
-      </Text>
     </View>
   );
 
   const renderModelAlert = (basin: BasinForecast) => {
     const riskColor = RISK_COLORS[basin.riskLevel as RiskLevel];
     return (
-      <View
-        key={basin.hybasId}
-        style={[styles.row, { backgroundColor: colors.card, borderLeftWidth: 3, borderLeftColor: riskColor }]}
-      >
-        <View style={GlobalStyles.listItemHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={[Typography.label, { color: riskColor }]}>
-              {RISK_LABELS[basin.riskLevel as RiskLevel].toUpperCase()}
-            </Text>
-            <Text style={[Typography.h3, { color: colors.text, marginTop: 2 }]} numberOfLines={1}>
-              {basin.province}
-            </Text>
-          </View>
-          <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-            {new Date(basin.forecastDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
-          </Text>
-        </View>
-
-        <Text style={[Typography.body2, { color: colors.textSecondary, marginTop: Spacing.s }]}>
-          Xác suất lũ hôm nay:{' '}
-          <Text style={{ color: riskColor, fontWeight: '700' }}>
-            {(basin.floodProb * 100).toFixed(0)}%
-          </Text>
-        </Text>
-
-        <View style={styles.forecastRow}>
-          {basin.forecast7d.slice(1, 5).map((f, i) => (
-            <View key={i} style={styles.forecastDay}>
-              <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-                {new Date(f.forecastDate).toLocaleDateString('vi-VN', { weekday: 'short' }).toUpperCase()}
+      <View key={basin.hybasId} style={[styles.alertCard, { backgroundColor: colors.card }]}>
+        <View style={[styles.urgentAccent, { backgroundColor: riskColor }]} />
+        <View style={styles.cardInner}>
+          <View style={GlobalStyles.listItemHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={[Typography.label, { color: riskColor }]}>
+                {RISK_LABELS[basin.riskLevel as RiskLevel].toUpperCase()}
               </Text>
-              <View style={[styles.forecastBar, { backgroundColor: RISK_COLORS[f.riskLevel as RiskLevel] ?? '#ccc' }]} />
-              <Text style={[Typography.caption, { color: colors.text, fontWeight: '700' }]}>
-                {(f.floodProb * 100).toFixed(0)}%
+              <Text style={[Typography.h3, { color: colors.text, marginTop: 2 }]} numberOfLines={1}>
+                {basin.province}
               </Text>
             </View>
-          ))}
+            <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+              {new Date(basin.forecastDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+            </Text>
+          </View>
+
+          <Text style={[Typography.body2, { color: colors.textSecondary, marginTop: Spacing.s }]}>
+            Xác suất lũ hôm nay:{' '}
+            <Text style={{ color: riskColor, fontWeight: '700' }}>
+              {(basin.floodProb * 100).toFixed(0)}%
+            </Text>
+          </Text>
+
+          <View style={styles.forecastRow}>
+            {basin.forecast7d.slice(1, 5).map((f, i) => (
+              <View key={i} style={styles.forecastDay}>
+                <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+                  {new Date(f.forecastDate).toLocaleDateString('vi-VN', { weekday: 'short' }).toUpperCase()}
+                </Text>
+                <View style={[styles.forecastBar, { backgroundColor: RISK_COLORS[f.riskLevel as RiskLevel] ?? '#ccc' }]} />
+                <Text style={[Typography.caption, { color: colors.text, fontWeight: '700' }]}>
+                  {(f.floodProb * 100).toFixed(0)}%
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
       </View>
     );
@@ -100,10 +99,12 @@ export const NotificationsScreen = () => {
 
   return (
     <SafeAreaView style={[GlobalStyles.container, { backgroundColor: colors.background }]}>
-      <Text style={[GlobalStyles.headerContainer, GlobalStyles.headerTitleCenter, Typography.h1, { color: colors.text }]}>
-        Cảnh báo
-      </Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={[Typography.h1, { color: colors.text }]}>Cảnh báo</Text>
+      </View>
 
+      {/* Tab bar */}
       <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
@@ -159,31 +160,47 @@ export const NotificationsScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: Spacing.l,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.m,
+  },
   tabBar: {
     flexDirection: 'row',
     borderBottomWidth: 1,
+    marginHorizontal: Spacing.l,
   },
   tab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: Spacing.m,
+    paddingRight: Spacing.l,
     gap: Spacing.s,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
   list: {
+    paddingHorizontal: Spacing.m,
+    paddingTop: Spacing.m,
     paddingBottom: Spacing.xl,
-    gap: 1,
+    gap: Spacing.s,
   },
-  row: {
-    padding: Spacing.m,
+  alertCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    flexDirection: 'row',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  urgentAccent: {
+    width: 4,
+  },
+  cardInner: {
+    flex: 1,
+    padding: Spacing.m,
   },
   forecastRow: {
     flexDirection: 'row',
@@ -197,10 +214,12 @@ const styles = StyleSheet.create({
   forecastBar: {
     width: 4,
     height: 16,
+    borderRadius: 2,
   },
   countPill: {
     minWidth: 18,
     height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,

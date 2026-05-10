@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useColorScheme } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MapScreen } from '../screens/MapScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
@@ -7,9 +7,12 @@ import { ChatbotScreen } from '../screens/ChatbotScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { RescueBottomSheet } from '../components/RescueBottomSheet';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../theme';
+import { useTheme } from '../theme/useTheme';
 
 const Tab = createBottomTabNavigator();
+
+// Stable reference — avoids the "inline component" re-render warning
+const EmptyScreen = () => null;
 
 const SOSButton = ({ onPress, color }: { onPress: () => void; color: string }) => (
   <View style={styles.sosWrap}>
@@ -23,8 +26,7 @@ const SOSButton = ({ onPress, color }: { onPress: () => void; color: string }) =
 );
 
 export const TabNavigator = () => {
-  const isDarkMode = useColorScheme() === 'dark';
-  const themeColors = isDarkMode ? Colors.dark : Colors.light;
+  const { colors } = useTheme();
   const [rescueOpen, setRescueOpen] = useState(false);
 
   return (
@@ -32,11 +34,11 @@ export const TabNavigator = () => {
       <Tab.Navigator
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarActiveTintColor: themeColors.primary,
-          tabBarInactiveTintColor: themeColors.textSecondary,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textSecondary,
           tabBarStyle: {
-            backgroundColor: themeColors.card,
-            borderTopColor: themeColors.border,
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
             borderTopWidth: 1,
             overflow: 'visible',
           },
@@ -55,15 +57,14 @@ export const TabNavigator = () => {
         <Tab.Screen name="Bản đồ" component={MapScreen} />
         <Tab.Screen name="Cảnh báo" component={NotificationsScreen} />
 
-        {/* Centre SOS — never navigates, button fully overridden */}
         <Tab.Screen
           name="SOS"
-          component={() => null}
+          component={EmptyScreen}
           options={{
             tabBarLabel: () => null,
             tabBarButton: () => (
               <SOSButton
-                color={themeColors.danger}
+                color={colors.danger}
                 onPress={() => setRescueOpen(true)}
               />
             ),

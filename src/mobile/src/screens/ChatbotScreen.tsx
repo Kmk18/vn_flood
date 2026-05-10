@@ -96,8 +96,9 @@ export const ChatbotScreen = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <View>
-            <Text style={[Typography.h3, { color: colors.text }]}>Trợ lý VNFlood</Text>
+          <Text style={[Typography.h1, { color: colors.text }]}>Trợ lý</Text>
+          <View style={styles.statusBadge}>
+            <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
             <Text style={[Typography.caption, { color: colors.success }]}>Đang hoạt động</Text>
           </View>
         </View>
@@ -142,12 +143,21 @@ export const ChatbotScreen = () => {
 
 const styles = StyleSheet.create({
   header: {
+    paddingHorizontal: Spacing.l,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.m,
+    borderBottomWidth: 1,
+  },
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.m,
-    paddingHorizontal: Spacing.l,
-    paddingVertical: Spacing.m,
-    borderBottomWidth: 1,
+    gap: Spacing.xs,
+    marginTop: 2,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   messageList: {
     padding: Spacing.m,

@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useColorScheme, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../theme';
+import { Spacing, Typography } from '../theme';
+import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 
 const mockRescuePoints = [
@@ -11,12 +12,11 @@ const mockRescuePoints = [
 ];
 
 export const RescueModeScreen = () => {
-  const isDarkMode = useColorScheme() === 'dark';
-  const themeColors = isDarkMode ? Colors.dark : Colors.light;
+  const { colors } = useTheme();
 
   return (
-    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
-      <View style={[styles.header, { backgroundColor: themeColors.danger }]}>
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.emergencyBanner, { backgroundColor: colors.danger }]}>
         <Text style={[Typography.label, { color: 'rgba(255,255,255,0.7)', marginBottom: Spacing.xs }]}>
           CHẾ ĐỘ KHẨN CẤP
         </Text>
@@ -26,44 +26,41 @@ export const RescueModeScreen = () => {
         </Text>
       </View>
 
-      <Text style={[styles.sectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
+      <Text style={[styles.sectionLabel, Typography.label, { color: colors.textSecondary }]}>
         ĐIỂM SƠ TÁN GẦN BẠN
       </Text>
 
       <ScrollView contentContainerStyle={{ paddingBottom: Spacing.xl }}>
-        {mockRescuePoints.map((item, index) => (
-          <View
-            key={item.id}
-            style={[
-              styles.row,
-              { backgroundColor: themeColors.card },
-              index < mockRescuePoints.length - 1 && { borderBottomWidth: 1, borderBottomColor: themeColors.border },
-            ]}
-          >
-            <View style={styles.rowLeft}>
-              <Text style={[Typography.h3, { color: themeColors.text }]}>{item.name}</Text>
-              <View style={styles.meta}>
-                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
-                  {item.distance}
-                </Text>
-                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>·</Text>
-                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
-                  Sức chứa: {item.capacity}
-                </Text>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          {mockRescuePoints.map((item, index) => (
+            <View
+              key={item.id}
+              style={[
+                styles.row,
+                index < mockRescuePoints.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+              ]}
+            >
+              <View style={styles.rowLeft}>
+                <Text style={[Typography.h3, { color: colors.text }]}>{item.name}</Text>
+                <View style={styles.meta}>
+                  <Text style={[Typography.caption, { color: colors.textSecondary }]}>{item.distance}</Text>
+                  <Text style={[Typography.caption, { color: colors.textSecondary }]}>·</Text>
+                  <Text style={[Typography.caption, { color: colors.textSecondary }]}>Sức chứa: {item.capacity}</Text>
+                </View>
               </View>
+              <TouchableOpacity style={[styles.dirBtn, { backgroundColor: colors.primary }]} onPress={() => {}}>
+                <Text style={[Typography.label, { color: '#fff' }]}>CHỈ ĐƯỜNG</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={[styles.dirBtn, { backgroundColor: themeColors.primary }]} onPress={() => {}}>
-              <Text style={[Typography.label, { color: '#fff' }]}>CHỈ ĐƯỜNG</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  header: {
+  emergencyBanner: {
     paddingHorizontal: Spacing.l,
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.l,
@@ -72,6 +69,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.l,
     paddingTop: Spacing.l,
     paddingBottom: Spacing.s,
+  },
+  card: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginHorizontal: Spacing.m,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   row: {
     flexDirection: 'row',
@@ -91,5 +98,6 @@ const styles = StyleSheet.create({
   dirBtn: {
     paddingHorizontal: Spacing.m,
     paddingVertical: Spacing.s,
+    borderRadius: 8,
   },
 });
