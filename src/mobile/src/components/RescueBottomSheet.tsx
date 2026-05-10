@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Animated,
-  Dimensions, StyleSheet, ScrollView, useColorScheme, KeyboardAvoidingView, Platform,
+  Dimensions, StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { Colors, Spacing, Typography } from '../theme';
+import { Spacing, Typography } from '../theme';
+import { useTheme } from '../theme/useTheme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.56);
@@ -20,8 +21,7 @@ interface Props {
 }
 
 export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
-  const isDarkMode = useColorScheme() === 'dark';
-  const themeColors = isDarkMode ? Colors.dark : Colors.light;
+  const { colors: themeColors } = useTheme();
 
   const [mounted, setMounted] = useState(false);
   const [submitted, setSubmitted] = useState(false);

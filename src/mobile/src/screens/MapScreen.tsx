@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, useColorScheme } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
-import { Colors, Spacing, Typography } from '../theme';
+import { Spacing, Typography } from '../theme';
+import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useFloodStore, RISK_COLORS, RISK_LABELS, RiskLevel } from '../store/useFloodStore';
 import { BasinForecast } from '../mock/floodData';
@@ -10,8 +11,7 @@ const RISK_ORDER: RiskLevel[] = ['low', 'medium', 'high', 'critical'];
 const VIETNAM_REGION = { latitude: 16.0, longitude: 107.5, latitudeDelta: 13.0, longitudeDelta: 9.0 };
 
 export const MapScreen = () => {
-  const isDarkMode = useColorScheme() === 'dark';
-  const themeColors = isDarkMode ? Colors.dark : Colors.light;
+  const { isDarkMode, colors: themeColors } = useTheme();
 
   const { basins, selectedBasin, filterMinRisk, setSelectedBasin, setFilterMinRisk } = useFloodStore();
 
@@ -20,11 +20,17 @@ export const MapScreen = () => {
   const [showSettings, setShowSettings] = useState(false);
 
   const minOrder = RISK_ORDER.indexOf(filterMinRisk);
-  const visibleBasins = basins.filter((b) => RISK_ORDER.indexOf(b.riskLevel) >= minOrder);
+  const visibleBasins = useMemo(
+    () => basins.filter((b) => RISK_ORDER.indexOf(b.riskLevel) >= minOrder),
+    [basins, minOrder]
+  );
 
-  const suggestions: BasinForecast[] = searchQuery.trim().length > 0
-    ? basins.filter((b) => b.province.toLowerCase().includes(searchQuery.toLowerCase()))
-    : [];
+  const suggestions: BasinForecast[] = useMemo(
+    () => searchQuery.trim().length > 0
+      ? basins.filter((b) => b.province.toLowerCase().includes(searchQuery.toLowerCase()))
+      : [],
+    [basins, searchQuery]
+  );
 
   const handleSelectSuggestion = (basin: BasinForecast) => {
     setSelectedBasin(basin);

@@ -1,22 +1,32 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-export const API_URL = 'http://10.0.2.2:4000';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:4000';
 
 const ACCESS_KEY = 'access_token';
 const REFRESH_KEY = 'refresh_token';
 
+// undefined = not yet loaded; null = no token; string = has token
+let _cachedToken: string | null | undefined = undefined;
+
 export const saveTokens = async (accessToken: string, refreshToken: string) => {
+  _cachedToken = accessToken;
   await SecureStore.setItemAsync(ACCESS_KEY, accessToken);
   await SecureStore.setItemAsync(REFRESH_KEY, refreshToken);
 };
 
 export const clearTokens = async () => {
+  _cachedToken = null;
   await SecureStore.deleteItemAsync(ACCESS_KEY);
   await SecureStore.deleteItemAsync(REFRESH_KEY);
 };
 
-export const getAccessToken = () => SecureStore.getItemAsync(ACCESS_KEY);
+export const getAccessToken = async () => {
+  if (_cachedToken !== undefined) return _cachedToken;
+  _cachedToken = await SecureStore.getItemAsync(ACCESS_KEY);
+  return _cachedToken;
+};
+
 export const getRefreshToken = () => SecureStore.getItemAsync(REFRESH_KEY);
 
 export const api = axios.create({ baseURL: API_URL });
@@ -45,6 +55,7 @@ api.interceptors.response.use(
         const refreshToken = await getRefreshToken();
         if (!refreshToken) throw new Error('no refresh token');
         const { data } = await axios.post(`${API_URL}/api/auth/refresh`, { refreshToken });
+        _cachedToken = data.accessToken;
         await SecureStore.setItemAsync(ACCESS_KEY, data.accessToken);
         original.headers.Authorization = `Bearer ${data.accessToken}`;
         return api(original);

@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, useColorScheme, ActivityIndicator } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Colors, Spacing, Typography } from '../theme';
+import { Spacing, Typography } from '../theme';
+import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useAuthStore } from '../store/useAuthStore';
+import { isValidEmail } from '../utils/validation';
 
 export const LoginScreen = () => {
   const navigation = useNavigation();
-  const isDarkMode = useColorScheme() === 'dark';
-  const themeColors = isDarkMode ? Colors.dark : Colors.light;
+  const { isDarkMode, colors } = useTheme();
   const { login, isLoading } = useAuthStore();
 
   const [email, setEmail] = useState('');
@@ -23,7 +24,7 @@ export const LoginScreen = () => {
       setError('Vui lòng điền đầy đủ thông tin.');
       return;
     }
-    if (!email.includes('@')) {
+    if (!isValidEmail(email)) {
       setError('Vui lòng nhập một địa chỉ email hợp lệ.');
       return;
     }
@@ -39,16 +40,16 @@ export const LoginScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         style={GlobalStyles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={GlobalStyles.centeredContent}>
-          <Text style={[Typography.h1, { color: themeColors.text, marginBottom: Spacing.s }]}>
+          <Text style={[Typography.h1, { color: colors.text, marginBottom: Spacing.s }]}>
             VNFlood
           </Text>
-          <Text style={[Typography.body1, { color: themeColors.textSecondary, marginBottom: Spacing.xl }]}>
+          <Text style={[Typography.body1, { color: colors.textSecondary, marginBottom: Spacing.xl }]}>
             Đăng nhập để xem dự báo lũ lụt và yêu cầu cứu hộ.
           </Text>
 
@@ -74,7 +75,7 @@ export const LoginScreen = () => {
 
           <View style={{ marginTop: Spacing.l }}>
             {isLoading ? (
-              <ActivityIndicator color={themeColors.primary} />
+              <ActivityIndicator color={colors.primary} />
             ) : (
               <>
                 <Button title="Đăng nhập" onPress={handleLogin} isDarkMode={isDarkMode} />

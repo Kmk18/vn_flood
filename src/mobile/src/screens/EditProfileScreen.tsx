@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, useColorScheme, ActivityIndicator } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Colors, Spacing, Typography } from '../theme';
+import { Spacing, Typography } from '../theme';
+import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useAuthStore } from '../store/useAuthStore';
 import { usersApi } from '../api/users';
 
 export const EditProfileScreen = () => {
   const navigation = useNavigation();
-  const isDarkMode = useColorScheme() === 'dark';
-  const themeColors = isDarkMode ? Colors.dark : Colors.light;
+  const { isDarkMode, colors } = useTheme();
 
   const { user, updateUser } = useAuthStore();
 
@@ -44,16 +44,16 @@ export const EditProfileScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         style={GlobalStyles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={GlobalStyles.centeredContent}>
-          <Text style={[Typography.h1, { color: themeColors.text, marginBottom: Spacing.s }]}>
+          <Text style={[Typography.h1, { color: colors.text, marginBottom: Spacing.s }]}>
             Chỉnh sửa hồ sơ
           </Text>
-          <Text style={[Typography.body1, { color: themeColors.textSecondary, marginBottom: Spacing.xl }]}>
+          <Text style={[Typography.body1, { color: colors.textSecondary, marginBottom: Spacing.xl }]}>
             Cập nhật thông tin cá nhân của bạn.
           </Text>
 
@@ -76,7 +76,7 @@ export const EditProfileScreen = () => {
 
           <View style={{ marginTop: Spacing.l }}>
             {isLoading ? (
-              <ActivityIndicator color={themeColors.primary} />
+              <ActivityIndicator color={colors.primary} />
             ) : (
               <>
                 <Button title="Lưu thay đổi" onPress={handleSave} isDarkMode={isDarkMode} />

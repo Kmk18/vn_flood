@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, useColorScheme, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../theme';
+import { Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
+import { useTheme } from '../theme/useTheme';
 
 interface Message {
   id: string;
@@ -12,8 +13,7 @@ interface Message {
 }
 
 export const ChatbotScreen = () => {
-  const isDarkMode = useColorScheme() === 'dark';
-  const themeColors = isDarkMode ? Colors.dark : Colors.light;
+  const { isDarkMode, colors } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
 
   const [inputText, setInputText] = useState('');
@@ -36,10 +36,7 @@ export const ChatbotScreen = () => {
         sources: ['Trung tâm Dự báo Khí tượng Thủy văn Quốc gia', 'Trạm Nước Địa phương Alpha'],
       };
       setMessages((prev) => [...prev, botMsg]);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }, 1000);
-
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
   };
 
   const renderMessage = (item: Message, index: number) => {
@@ -52,14 +49,14 @@ export const ChatbotScreen = () => {
 
     const bubbleStyle = isBot
       ? {
-          backgroundColor: isDarkMode ? themeColors.card : '#F0F0F0',
+          backgroundColor: isDarkMode ? colors.card : '#F0F0F0',
           borderTopLeftRadius: radiusTop,
           borderBottomLeftRadius: radiusBottom,
           borderTopRightRadius: 18,
           borderBottomRightRadius: 18,
         }
       : {
-          backgroundColor: themeColors.primary,
+          backgroundColor: colors.primary,
           borderTopLeftRadius: 18,
           borderBottomLeftRadius: 18,
           borderTopRightRadius: radiusTop,
@@ -72,16 +69,16 @@ export const ChatbotScreen = () => {
         style={[styles.row, isBot ? styles.rowBot : styles.rowUser, prevSameSender && { marginTop: 2 }]}
       >
         <View style={[styles.bubble, bubbleStyle]}>
-          <Text style={[Typography.body1, { color: isBot ? themeColors.text : '#FFF', lineHeight: 22 }]}>
+          <Text style={[Typography.body1, { color: isBot ? colors.text : '#FFF', lineHeight: 22 }]}>
             {item.text}
           </Text>
           {isBot && item.sources && (
-            <View style={[styles.sources, { borderTopColor: isDarkMode ? themeColors.border : '#D8D8D8' }]}>
-              <Text style={[Typography.caption, { color: themeColors.textSecondary, fontWeight: '600' }]}>
+            <View style={[styles.sources, { borderTopColor: isDarkMode ? colors.border : '#D8D8D8' }]}>
+              <Text style={[Typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
                 Nguồn:
               </Text>
               {item.sources.map((s, i) => (
-                <Text key={i} style={[Typography.caption, { color: themeColors.primary, marginTop: 2 }]}>
+                <Text key={i} style={[Typography.caption, { color: colors.primary, marginTop: 2 }]}>
                   · {s}
                 </Text>
               ))}
@@ -93,37 +90,37 @@ export const ChatbotScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: themeColors.background }]}>
+    <SafeAreaView style={[GlobalStyles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         style={GlobalStyles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View>
-            <Text style={[Typography.h3, { color: themeColors.text }]}>Trợ lý VNFlood</Text>
-            <Text style={[Typography.caption, { color: themeColors.success }]}>Đang hoạt động</Text>
+            <Text style={[Typography.h3, { color: colors.text }]}>Trợ lý VNFlood</Text>
+            <Text style={[Typography.caption, { color: colors.success }]}>Đang hoạt động</Text>
           </View>
         </View>
 
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={styles.messageList}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.map((item, index) => renderMessage(item, index))}
         </ScrollView>
 
-        <View style={[styles.inputRow, { borderTopColor: themeColors.border, backgroundColor: themeColors.background }]}>
+        <View style={[styles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
           <TextInput
             style={[
               styles.textInput,
               {
-                backgroundColor: isDarkMode ? themeColors.card : '#F0F0F0',
-                color: themeColors.text,
+                backgroundColor: isDarkMode ? colors.card : '#F0F0F0',
+                color: colors.text,
               },
             ]}
             placeholder="Nhập câu hỏi..."
-            placeholderTextColor={themeColors.textSecondary}
+            placeholderTextColor={colors.textSecondary}
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleSend}
@@ -131,7 +128,7 @@ export const ChatbotScreen = () => {
             multiline
           />
           <TouchableOpacity
-            style={[styles.sendBtn, { backgroundColor: inputText.trim() ? themeColors.primary : themeColors.border }]}
+            style={[styles.sendBtn, { backgroundColor: inputText.trim() ? colors.primary : colors.border }]}
             onPress={handleSend}
             disabled={!inputText.trim()}
           >
