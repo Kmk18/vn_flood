@@ -5,6 +5,7 @@ import { TabNavigator } from './TabNavigator';
 import { AuthNavigator } from './AuthNavigator';
 import { RescueModeScreen } from '../screens/RescueModeScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
+import { AppSettingsScreen } from '../screens/AppSettingsScreen';
 import { useAuthStore } from '../store/useAuthStore';
 
 const Stack = createNativeStackNavigator();
@@ -23,6 +24,7 @@ export const AppNavigator = () => {
         <Stack.Screen name="Auth" component={AuthNavigator} />
         <Stack.Screen name="RescueMode" component={RescueModeScreen} options={{ presentation: 'modal' }} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ presentation: 'modal' }} />
+        <Stack.Screen name="AppSettings" component={AppSettingsScreen} options={{ presentation: 'modal' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

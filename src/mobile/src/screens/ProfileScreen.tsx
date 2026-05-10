@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, Switch, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Switch, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
@@ -93,10 +94,19 @@ export const ProfileScreen = () => {
             />
           </View>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <View style={styles.fieldRow}>
-            <Text style={[Typography.body1, { color: colors.text }]}>Phiên bản</Text>
-            <Text style={[Typography.body2, { color: colors.textSecondary }]}>1.0.0</Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.fieldRow, styles.fieldRowCenter]}
+            onPress={() => navigation.navigate('AppSettings')}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[Typography.body1, { color: colors.text }]}>Cài đặt ứng dụng</Text>
+              <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                Giao diện, chế độ tối và thông tin
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         {/* Auth action */}
