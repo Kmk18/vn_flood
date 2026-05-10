@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Platform, LayoutAnimation } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT, MapType } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
@@ -7,6 +7,9 @@ import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useFloodStore, RISK_COLORS, RISK_LABELS, RiskLevel } from '../store/useFloodStore';
 import { BasinForecast } from '../mock/floodData';
+
+
+const LAYOUT_ANIM = LayoutAnimation.create(220, 'easeInEaseOut', 'opacity');
 
 const DARK_MAP_STYLE = [
   { elementType: 'geometry.fill',                                                           stylers: [{ visibility: 'on' }, { color: '#324447' }] },
@@ -29,18 +32,17 @@ const DARK_MAP_STYLE = [
 const RISK_ORDER: RiskLevel[] = ['low', 'medium', 'high', 'critical'];
 const VIETNAM_REGION = { latitude: 16.0, longitude: 107.5, latitudeDelta: 13.0, longitudeDelta: 9.0 };
 
-type MapStyleId = 'standard' | 'satellite' | 'hybrid' | 'dark';
+type MapStyleId = 'standard' | 'satellite' | 'hybrid';
 
 const MAP_STYLES: { id: MapStyleId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: 'standard',  label: 'Tiêu chuẩn', icon: 'map-outline' },
   { id: 'satellite', label: 'Vệ tinh',    icon: 'earth-outline' },
   { id: 'hybrid',    label: 'Kết hợp',    icon: 'layers-outline' },
-  { id: 'dark',      label: 'Tối',        icon: 'moon-outline' },
 ];
+
 
 export const MapScreen = () => {
   const { isDarkMode, colors: themeColors } = useTheme();
-
   const { basins, selectedBasin, filterMinRisk, setSelectedBasin, setFilterMinRisk } = useFloodStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,10 +50,10 @@ export const MapScreen = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [mapStyle, setMapStyle] = useState<MapStyleId>('standard');
 
-  const mapType = (mapStyle === 'dark' ? 'standard' : mapStyle) as MapType;
-  const mapUiStyle = mapStyle === 'dark' || isDarkMode ? 'dark' : 'light';
-
+  const mapType = mapStyle as MapType;
+  const mapUiStyle = isDarkMode ? 'dark' : 'light';
   const minOrder = RISK_ORDER.indexOf(filterMinRisk);
+
   const visibleBasins = useMemo(
     () => basins.filter((b) => RISK_ORDER.indexOf(b.riskLevel) >= minOrder),
     [basins, minOrder]
@@ -71,6 +73,7 @@ export const MapScreen = () => {
   };
 
   const dismissAll = () => {
+    LayoutAnimation.configureNext(LAYOUT_ANIM);
     setSelectedBasin(null);
     setShowSuggestions(false);
     setShowSettings(false);
@@ -85,16 +88,26 @@ export const MapScreen = () => {
         mapType={mapType}
         userInterfaceStyle={mapUiStyle}
         customMapStyle={Platform.OS === 'android' && mapUiStyle === 'dark' ? DARK_MAP_STYLE : []}
+        toolbarEnabled={false}
+        showsCompass={false}
+        showsMyLocationButton={false}
+        zoomControlEnabled={false}
         onPress={dismissAll}
       >
-        {visibleBasins.map((basin) => (
-          <Marker
-            key={basin.hybasId}
-            coordinate={{ latitude: basin.lat, longitude: basin.lon }}
-            pinColor={RISK_COLORS[basin.riskLevel]}
-            onPress={() => { setShowSuggestions(false); setShowSettings(false); setSelectedBasin(basin); }}
-          />
-        ))}
+        {visibleBasins.map((basin) => {
+          return (
+            <Marker
+              key={basin.hybasId}
+              coordinate={{ latitude: basin.lat, longitude: basin.lon }}
+              pinColor={RISK_COLORS[basin.riskLevel]}
+              onPress={() => {
+                setShowSuggestions(false);
+                setShowSettings(false);
+                setSelectedBasin(basin);
+              }}
+            />
+          );
+        })}
       </MapView>
 
       {/* ── Search row ── */}
@@ -106,7 +119,11 @@ export const MapScreen = () => {
             placeholder="Tìm kiếm tỉnh thành..."
             placeholderTextColor={themeColors.textSecondary}
             value={searchQuery}
-            onChangeText={(t) => { setSearchQuery(t); setShowSuggestions(true); setSelectedBasin(null); }}
+            onChangeText={(t) => {
+              setSearchQuery(t);
+              setShowSuggestions(true);
+              setSelectedBasin(null);
+            }}
             onFocus={() => setShowSuggestions(true)}
             returnKeyType="search"
           />
@@ -119,7 +136,11 @@ export const MapScreen = () => {
 
         <TouchableOpacity
           style={[GlobalStyles.mapMenuBtn, { backgroundColor: showSettings ? themeColors.primary : themeColors.card }]}
-          onPress={() => { setShowSettings((v) => !v); setShowSuggestions(false); }}
+          onPress={() => {
+            LayoutAnimation.configureNext(LAYOUT_ANIM);
+            setShowSettings((v) => !v);
+            setShowSuggestions(false);
+          }}
         >
           <Text style={[GlobalStyles.mapMenuIcon, { color: showSettings ? '#fff' : themeColors.text }]}>≡</Text>
         </TouchableOpacity>
@@ -153,9 +174,9 @@ export const MapScreen = () => {
 
       {/* ── Basin detail panel ── */}
       {selectedBasin && !showSettings && (
-        <View style={[GlobalStyles.mapPanel, { backgroundColor: themeColors.card }]}>
+        <View style={[GlobalStyles.mapPanel, { backgroundColor: themeColors.card, bottom: 0 }]}>
           <View style={[GlobalStyles.mapPanelAccent, { backgroundColor: RISK_COLORS[selectedBasin.riskLevel] }]} />
-          <View style={GlobalStyles.mapPanelContent}>
+          <View style={[GlobalStyles.mapPanelContent, { paddingBottom: Spacing.l }]}>
             <View style={GlobalStyles.mapPanelHeader}>
               <View>
                 <Text style={[Typography.label, { color: RISK_COLORS[selectedBasin.riskLevel] }]}>
@@ -165,7 +186,13 @@ export const MapScreen = () => {
                   {selectedBasin.province}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setSelectedBasin(null)} style={GlobalStyles.mapCloseBtn}>
+              <TouchableOpacity
+                onPress={() => {
+                  LayoutAnimation.configureNext(LAYOUT_ANIM);
+                  setSelectedBasin(null);
+                }}
+                style={GlobalStyles.mapCloseBtn}
+              >
                 <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -201,7 +228,10 @@ export const MapScreen = () => {
         <TouchableOpacity
           style={GlobalStyles.mapBackdrop}
           activeOpacity={1}
-          onPress={() => setShowSettings(false)}
+          onPress={() => {
+            LayoutAnimation.configureNext(LAYOUT_ANIM);
+            setShowSettings(false);
+          }}
         />
       )}
 
@@ -212,12 +242,14 @@ export const MapScreen = () => {
 
           <View style={GlobalStyles.mapSheetHeader}>
             <Text style={[Typography.h3, { color: themeColors.text }]}>Cài đặt bản đồ</Text>
-            <TouchableOpacity onPress={() => setShowSettings(false)}>
+            <TouchableOpacity onPress={() => {
+              LayoutAnimation.configureNext(LAYOUT_ANIM);
+              setShowSettings(false);
+            }}>
               <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Map style selector */}
           <Text style={[GlobalStyles.mapSheetSectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
             KIỂU BẢN ĐỒ
           </Text>
@@ -237,11 +269,7 @@ export const MapScreen = () => {
                   ]}
                   activeOpacity={0.75}
                 >
-                  <Ionicons
-                    name={icon}
-                    size={20}
-                    color={active ? '#fff' : themeColors.textSecondary}
-                  />
+                  <Ionicons name={icon} size={20} color={active ? '#fff' : themeColors.textSecondary} />
                   <Text style={[
                     Typography.caption,
                     { color: active ? '#fff' : themeColors.text, fontWeight: active ? '700' : '400', marginTop: 4 },
@@ -253,7 +281,6 @@ export const MapScreen = () => {
             })}
           </View>
 
-          {/* Risk filter */}
           <View style={[GlobalStyles.mapSheetDivider, { backgroundColor: themeColors.border }]} />
           <Text style={[GlobalStyles.mapSheetSectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
             HIỂN THỊ TỪ MỨC RỦI RO
@@ -282,7 +309,6 @@ export const MapScreen = () => {
             })}
           </View>
 
-          {/* Layer list */}
           <View style={[GlobalStyles.mapSheetDivider, { backgroundColor: themeColors.border }]} />
           <Text style={[GlobalStyles.mapSheetSectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
             LỚP BẢN ĐỒ
@@ -312,7 +338,6 @@ export const MapScreen = () => {
             </View>
           ))}
 
-          {/* Legend */}
           <View style={[GlobalStyles.mapSheetDivider, { backgroundColor: themeColors.border }]} />
           <Text style={[GlobalStyles.mapSheetSectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
             CHÚ THÍCH MÀU SẮC

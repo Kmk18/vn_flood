@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
@@ -17,43 +18,105 @@ export const NotificationsScreen = () => {
   const authorityAlerts = useAlertStore((state) => state.alerts);
   const modelAlerts = useFloodStore((state) => state.alerts);
 
-  const renderAuthorityAlert = (item: Alert) => (
-    <View
-      key={item.id}
-      style={[styles.alertCard, { backgroundColor: colors.card }]}
-    >
-      {item.isUrgent && <View style={[styles.urgentAccent, { backgroundColor: colors.danger }]} />}
-      <View style={styles.cardInner}>
-        <View style={GlobalStyles.listItemHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.s, flex: 1 }}>
-            {item.isUrgent && (
-              <Text style={[Typography.label, { color: colors.danger }]}>KHẨN</Text>
-            )}
-            <Text
-              style={[Typography.h3, { color: item.isUrgent ? colors.danger : colors.text, flex: 1 }]}
-              numberOfLines={1}
-            >
-              {item.title}
-            </Text>
+  // Pre-expand urgent authority alerts and critical model alerts
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    authorityAlerts.forEach((a) => { if (a.isUrgent) s.add(`a-${a.id}`); });
+    modelAlerts.forEach((b) => { if (b.riskLevel === 'critical') s.add(`m-${b.hybasId}`); });
+    return s;
+  });
+
+  // Measured line counts for authority alert messages (hidden text trick)
+  const [msgLines, setMsgLines] = useState<Record<string, number>>({});
+  const recordLines = (id: string, count: number) =>
+    setMsgLines((prev) => prev[id] === count ? prev : { ...prev, [id]: count });
+
+  const isExpanded = (key: string) => expanded.has(key);
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const s = new Set(prev);
+      s.has(key) ? s.delete(key) : s.add(key);
+      return s;
+    });
+
+  const renderAuthorityAlert = (item: Alert) => {
+    const key = `a-${item.id}`;
+    const open = isExpanded(key);
+    // canExpand is true once we've measured the message and it wraps to >1 line
+    const canExpand = (msgLines[item.id] ?? 0) > 1;
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={[styles.alertCard, { backgroundColor: colors.card }]}
+        onPress={canExpand ? () => toggle(key) : undefined}
+        activeOpacity={canExpand ? 0.85 : 1}
+      >
+        {item.isUrgent && <View style={[styles.accent, { backgroundColor: colors.danger }]} />}
+        <View style={styles.cardInner}>
+          <View style={styles.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.s, flex: 1 }}>
+              {item.isUrgent && (
+                <Text style={[Typography.label, { color: colors.danger }]}>KHẨN</Text>
+              )}
+              <Text
+                style={[Typography.h3, { color: item.isUrgent ? colors.danger : colors.text, flex: 1 }]}
+                numberOfLines={1}
+              >
+                {item.title}
+              </Text>
+            </View>
+            <View style={styles.headerRight}>
+              <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+                {new Date(item.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              {canExpand && (
+                <Ionicons
+                  name={open ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={colors.textSecondary}
+                />
+              )}
+            </View>
           </View>
-          <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-            {new Date(item.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+
+          {/* Hidden measuring text — same width, zero height, invisible */}
+          <Text
+            style={styles.hiddenMeasure}
+            onTextLayout={(e) => recordLines(item.id, e.nativeEvent.lines.length)}
+          >
+            {item.message}
+          </Text>
+
+          <Text
+            style={[Typography.body2, { color: colors.textSecondary, marginTop: Spacing.s }]}
+            numberOfLines={canExpand && !open ? 1 : undefined}
+          >
+            {item.message}
           </Text>
         </View>
-        <Text style={[Typography.body2, { color: colors.textSecondary, marginTop: Spacing.s }]}>
-          {item.message}
-        </Text>
-      </View>
-    </View>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderModelAlert = (basin: BasinForecast) => {
+    const key = `m-${basin.hybasId}`;
+    const open = isExpanded(key);
     const riskColor = RISK_COLORS[basin.riskLevel as RiskLevel];
+    const isImportant = basin.riskLevel === 'critical' || basin.riskLevel === 'high';
+    // forecast7d always has data — model alerts are always expandable
+    const canExpand = basin.forecast7d.length > 1;
+
     return (
-      <View key={basin.hybasId} style={[styles.alertCard, { backgroundColor: colors.card }]}>
-        <View style={[styles.urgentAccent, { backgroundColor: riskColor }]} />
+      <TouchableOpacity
+        key={basin.hybasId}
+        style={[styles.alertCard, { backgroundColor: colors.card }]}
+        onPress={canExpand ? () => toggle(key) : undefined}
+        activeOpacity={canExpand ? 0.85 : 1}
+      >
+        <View style={[styles.accent, { backgroundColor: riskColor }]} />
         <View style={styles.cardInner}>
-          <View style={GlobalStyles.listItemHeader}>
+          <View style={styles.cardHeader}>
             <View style={{ flex: 1 }}>
               <Text style={[Typography.label, { color: riskColor }]}>
                 {RISK_LABELS[basin.riskLevel as RiskLevel].toUpperCase()}
@@ -62,33 +125,47 @@ export const NotificationsScreen = () => {
                 {basin.province}
               </Text>
             </View>
-            <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-              {new Date(basin.forecastDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
-            </Text>
+            <View style={styles.headerRight}>
+              <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+                {new Date(basin.forecastDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+              </Text>
+              {canExpand && (
+                <Ionicons
+                  name={open ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={colors.textSecondary}
+                />
+              )}
+            </View>
           </View>
 
-          <Text style={[Typography.body2, { color: colors.textSecondary, marginTop: Spacing.s }]}>
-            Xác suất lũ hôm nay:{' '}
+          <Text
+            style={[Typography.body2, { color: colors.textSecondary, marginTop: Spacing.s }]}
+            numberOfLines={canExpand && !open && !isImportant ? 1 : undefined}
+          >
+            {'Xác suất lũ hôm nay: '}
             <Text style={{ color: riskColor, fontWeight: '700' }}>
               {(basin.floodProb * 100).toFixed(0)}%
             </Text>
           </Text>
 
-          <View style={styles.forecastRow}>
-            {basin.forecast7d.slice(1, 5).map((f, i) => (
-              <View key={i} style={styles.forecastDay}>
-                <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-                  {new Date(f.forecastDate).toLocaleDateString('vi-VN', { weekday: 'short' }).toUpperCase()}
-                </Text>
-                <View style={[styles.forecastBar, { backgroundColor: RISK_COLORS[f.riskLevel as RiskLevel] ?? '#ccc' }]} />
-                <Text style={[Typography.caption, { color: colors.text, fontWeight: '700' }]}>
-                  {(f.floodProb * 100).toFixed(0)}%
-                </Text>
-              </View>
-            ))}
-          </View>
+          {(open || isImportant) && (
+            <View style={styles.forecastRow}>
+              {basin.forecast7d.slice(1, 5).map((f, i) => (
+                <View key={i} style={styles.forecastDay}>
+                  <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+                    {new Date(f.forecastDate).toLocaleDateString('vi-VN', { weekday: 'short' }).toUpperCase()}
+                  </Text>
+                  <View style={[styles.forecastBar, { backgroundColor: RISK_COLORS[f.riskLevel as RiskLevel] ?? '#ccc' }]} />
+                  <Text style={[Typography.caption, { color: colors.text, fontWeight: '700' }]}>
+                    {(f.floodProb * 100).toFixed(0)}%
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -99,22 +176,17 @@ export const NotificationsScreen = () => {
 
   return (
     <SafeAreaView style={[GlobalStyles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={[Typography.h1, { color: colors.text }]}>Cảnh báo</Text>
       </View>
 
-      {/* Tab bar */}
       <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[
-                styles.tab,
-                isActive && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
-              ]}
+              style={[styles.tab, isActive && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
               onPress={() => setActiveTab(tab.key)}
             >
               <Text style={[
@@ -195,12 +267,32 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  urgentAccent: {
+  accent: {
     width: 4,
   },
   cardInner: {
     flex: 1,
     padding: Spacing.m,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginLeft: Spacing.s,
+    flexShrink: 0,
+  },
+  hiddenMeasure: {
+    position: 'absolute',
+    opacity: 0,
+    top: 0,
+    left: Spacing.m,
+    right: Spacing.m,
+    ...Typography.body2,
   },
   forecastRow: {
     flexDirection: 'row',
