@@ -1,14 +1,42 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Platform } from 'react-native';
+import MapView, { Marker, PROVIDER_DEFAULT, MapType } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useFloodStore, RISK_COLORS, RISK_LABELS, RiskLevel } from '../store/useFloodStore';
 import { BasinForecast } from '../mock/floodData';
 
+const DARK_MAP_STYLE = [
+  { elementType: 'geometry.fill',                                                           stylers: [{ visibility: 'on' }, { color: '#324447' }] },
+  { elementType: 'geometry.stroke',                                                         stylers: [{ visibility: 'on' }, { color: '#263538' }] },
+  { elementType: 'labels.text.fill',                                                        stylers: [{ visibility: 'on' }, { color: '#cccccc' }] },
+  { elementType: 'labels.text.stroke',                                                      stylers: [{ visibility: 'on' }, { weight: 0.1 }, { color: '#152022' }] },
+  { featureType: 'landscape',        elementType: 'geometry.fill',                          stylers: [{ visibility: 'on' }, { color: '#324447' }] },
+  { featureType: 'administrative',   elementType: 'geometry.stroke',                        stylers: [{ color: '#152022' }, { visibility: 'on' }, { weight: 1 }] },
+  { featureType: 'water',            elementType: 'geometry.fill',                          stylers: [{ visibility: 'on' }, { color: '#2d4a5a' }] },
+  { featureType: 'poi',              elementType: 'geometry',                               stylers: [{ visibility: 'on' }, { color: '#473d40' }] },
+  { featureType: 'poi',              elementType: 'labels.text',                            stylers: [{ visibility: 'simplified' }, { lightness: -24 }] },
+  { featureType: 'poi.park',         elementType: 'geometry.fill',                          stylers: [{ visibility: 'on' }, { color: '#2f4e43' }] },
+  { featureType: 'road',             elementType: 'geometry.fill',                          stylers: [{ visibility: 'on' }, { color: '#263538' }] },
+  { featureType: 'road',             elementType: 'geometry.stroke',                        stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit.line',     elementType: 'geometry.fill',                          stylers: [{ visibility: 'on' }, { color: '#243942' }] },
+  { featureType: 'transit.line',     elementType: 'geometry.stroke',                        stylers: [{ visibility: 'on' }, { color: '#263538' }] },
+  { featureType: 'transit.station.airport', elementType: 'geometry.fill',                   stylers: [{ visibility: 'on' }, { color: '#473d40' }] },
+];
+
 const RISK_ORDER: RiskLevel[] = ['low', 'medium', 'high', 'critical'];
 const VIETNAM_REGION = { latitude: 16.0, longitude: 107.5, latitudeDelta: 13.0, longitudeDelta: 9.0 };
+
+type MapStyleId = 'standard' | 'satellite' | 'hybrid' | 'dark';
+
+const MAP_STYLES: { id: MapStyleId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'standard',  label: 'Tiêu chuẩn', icon: 'map-outline' },
+  { id: 'satellite', label: 'Vệ tinh',    icon: 'earth-outline' },
+  { id: 'hybrid',    label: 'Kết hợp',    icon: 'layers-outline' },
+  { id: 'dark',      label: 'Tối',        icon: 'moon-outline' },
+];
 
 export const MapScreen = () => {
   const { isDarkMode, colors: themeColors } = useTheme();
@@ -18,6 +46,10 @@ export const MapScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [mapStyle, setMapStyle] = useState<MapStyleId>('standard');
+
+  const mapType = (mapStyle === 'dark' ? 'standard' : mapStyle) as MapType;
+  const mapUiStyle = mapStyle === 'dark' || isDarkMode ? 'dark' : 'light';
 
   const minOrder = RISK_ORDER.indexOf(filterMinRisk);
   const visibleBasins = useMemo(
@@ -50,7 +82,9 @@ export const MapScreen = () => {
         provider={PROVIDER_DEFAULT}
         style={GlobalStyles.mapAbsolute}
         initialRegion={VIETNAM_REGION}
-        userInterfaceStyle={isDarkMode ? 'dark' : 'light'}
+        mapType={mapType}
+        userInterfaceStyle={mapUiStyle}
+        customMapStyle={Platform.OS === 'android' && mapUiStyle === 'dark' ? DARK_MAP_STYLE : []}
         onPress={dismissAll}
       >
         {visibleBasins.map((basin) => (
@@ -162,7 +196,6 @@ export const MapScreen = () => {
         </View>
       )}
 
-
       {/* ── Settings backdrop ── */}
       {showSettings && (
         <TouchableOpacity
@@ -184,7 +217,44 @@ export const MapScreen = () => {
             </TouchableOpacity>
           </View>
 
+          {/* Map style selector */}
+          <Text style={[GlobalStyles.mapSheetSectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
+            KIỂU BẢN ĐỒ
+          </Text>
+          <View style={styles.mapStyleRow}>
+            {MAP_STYLES.map(({ id, label, icon }) => {
+              const active = mapStyle === id;
+              return (
+                <TouchableOpacity
+                  key={id}
+                  onPress={() => setMapStyle(id)}
+                  style={[
+                    styles.mapStyleChip,
+                    {
+                      backgroundColor: active ? themeColors.primary : themeColors.secondary,
+                      borderColor: active ? themeColors.primary : themeColors.border,
+                    },
+                  ]}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons
+                    name={icon}
+                    size={20}
+                    color={active ? '#fff' : themeColors.textSecondary}
+                  />
+                  <Text style={[
+                    Typography.caption,
+                    { color: active ? '#fff' : themeColors.text, fontWeight: active ? '700' : '400', marginTop: 4 },
+                  ]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           {/* Risk filter */}
+          <View style={[GlobalStyles.mapSheetDivider, { backgroundColor: themeColors.border }]} />
           <Text style={[GlobalStyles.mapSheetSectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
             HIỂN THỊ TỪ MỨC RỦI RO
           </Text>
@@ -262,3 +332,21 @@ export const MapScreen = () => {
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  mapStyleRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.l,
+    paddingBottom: Spacing.s,
+    gap: Spacing.s,
+  },
+  mapStyleChip: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.m,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    gap: 2,
+  },
+});

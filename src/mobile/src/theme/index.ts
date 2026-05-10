@@ -12,16 +12,16 @@ export const Colors = {
     textSecondary: '#5C6470',
   },
   dark: {
-    background: '#0D1117',
-    text: '#E6ECF3',
+    background: '#1C1C1C',
+    text: '#EFEFEF',
     primary: '#FF6B55',
-    secondary: '#161B25',
+    secondary: '#323232',
     danger: '#F04040',
     warning: '#F59E0B',
     success: '#22C55E',
-    border: '#1E2533',
-    card: '#131820',
-    textSecondary: '#8892A4',
+    border: '#454545',
+    card: '#272727',
+    textSecondary: '#9A9A9A',
   },
 };
 
