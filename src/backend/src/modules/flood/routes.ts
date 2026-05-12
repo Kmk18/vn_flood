@@ -131,7 +131,7 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
     }
   });
 
-  // GET /api/flood/alerts — high/critical basins from the latest available run
+  // GET /api/flood/alerts — high/critical basins from the latest available forecast date
   app.get('/api/flood/alerts', async (_req: Request, res: Response) => {
     try {
       const today = new Date().toISOString().slice(0, 10);
@@ -141,6 +141,13 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
           .select({ runDate: sql<string>`max(${predictions.runDate})` })
           .from(predictions);
         const runDate = latestRun[0]?.runDate ?? today;
+
+        // Use latest forecastDate within that run (same as predictions/today)
+        const latestForecast = await db
+          .select({ forecastDate: sql<string>`max(${predictions.forecastDate})` })
+          .from(predictions)
+          .where(eq(predictions.runDate, runDate));
+        const forecastDate = latestForecast[0]?.forecastDate ?? today;
 
         return db
           .select({
@@ -157,6 +164,7 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
           .where(
             and(
               inArray(predictions.riskLevel, ['high', 'critical']),
+              eq(predictions.forecastDate, forecastDate),
               eq(predictions.runDate, runDate)
             )
           )
