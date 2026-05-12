@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MapScreen } from '../screens/MapScreen';
@@ -8,6 +8,8 @@ import { ProfileScreen } from '../screens/ProfileScreen';
 import { RescueBottomSheet } from '../components/RescueBottomSheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/useTheme';
+import { useFloodStore } from '../store/useFloodStore';
+import { useAlertStore } from '../store/useAlertStore';
 
 const Tab = createBottomTabNavigator();
 
@@ -28,6 +30,10 @@ const SOSButton = ({ onPress, color }: { onPress: () => void; color: string }) =
 export const TabNavigator = () => {
   const { colors } = useTheme();
   const [rescueOpen, setRescueOpen] = useState(false);
+  const fetchData = useFloodStore((s) => s.fetchData);
+  const fetchAlerts = useAlertStore((s) => s.fetchAlerts);
+
+  useEffect(() => { fetchData(); fetchAlerts(); }, []);
 
   return (
     <View style={{ flex: 1 }}>

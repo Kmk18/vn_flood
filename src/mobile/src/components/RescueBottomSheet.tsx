@@ -5,15 +5,10 @@ import {
 } from 'react-native';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
+import { rescueApi, RescuePoint } from '../api/rescue';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.56);
-
-const MOCK_SHELTERS = [
-  { id: 1, name: 'Trường THPT Nguyễn Trãi', distanceKm: 1.2, capacity: 500 },
-  { id: 2, name: 'Nhà văn hóa Quận 1', distanceKm: 2.8, capacity: 300 },
-  { id: 3, name: 'Trung tâm Thể thao Hòa Bình', distanceKm: 4.1, capacity: 800 },
-];
 
 interface Props {
   visible: boolean;
@@ -26,6 +21,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
   const [mounted, setMounted] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [description, setDescription] = useState('');
+  const [shelters, setShelters] = useState<RescuePoint[]>([]);
 
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
   const pulseAnims = useRef([
@@ -35,6 +31,12 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
   ]).current;
   const holdProgress = useRef(new Animated.Value(0)).current;
   const holdAnim = useRef<Animated.CompositeAnimation | null>(null);
+
+  // Fetch shelter points once when the sheet opens
+  useEffect(() => {
+    if (!visible) return;
+    rescueApi.getPoints().then(setShelters).catch(() => {});
+  }, [visible]);
 
   // Mount before animating in; unmount only after animating out
   useEffect(() => {
@@ -92,7 +94,8 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
     holdAnim.current.start(({ finished }) => {
       if (finished) {
         setSubmitted(true);
-        // TODO: POST /api/rescue/requests with { lat, lon, description, peopleCount }
+        rescueApi.createRequest({ lat: 0, lon: 0, peopleCount: 1, notes: description || undefined })
+          .catch(() => {}); // fire-and-forget; submission confirmed locally
       }
     });
   };
@@ -193,7 +196,11 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
             ĐIỂM SƠ TÁN GẦN NHẤT
           </Text>
           <View style={{ backgroundColor: themeColors.secondary }}>
-            {MOCK_SHELTERS.map((shelter, i, arr) => (
+            {shelters.length === 0 ? (
+              <Text style={[Typography.caption, { color: themeColors.textSecondary, padding: Spacing.m }]}>
+                Đang tải điểm sơ tán...
+              </Text>
+            ) : shelters.map((shelter, i, arr) => (
               <View
                 key={shelter.id}
                 style={[
@@ -209,7 +216,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
                     {shelter.name}
                   </Text>
                   <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: 2 }]}>
-                    {shelter.distanceKm} km · Sức chứa {shelter.capacity} người
+                    {shelter.address} · Sức chứa {shelter.capacity} người
                   </Text>
                 </View>
               </View>

@@ -109,6 +109,48 @@ export const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Role-based management links */}
+        {isAuthenticated && (user?.role === 'admin' || user?.role === 'responder') && (
+          <>
+            <Text style={[styles.sectionLabel, Typography.label, { color: colors.textSecondary }]}>
+              QUẢN LÝ
+            </Text>
+            <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
+              {user?.role === 'admin' && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.fieldRow, styles.fieldRowCenter]}
+                    onPress={() => navigation.navigate('Admin')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[Typography.body1, { color: colors.text }]}>Quản trị hệ thống</Text>
+                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                        Người dùng, thống kê, thông báo
+                      </Text>
+                    </View>
+                    <Ionicons name="shield-outline" size={18} color={colors.primary} />
+                  </TouchableOpacity>
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                </>
+              )}
+              <TouchableOpacity
+                style={[styles.fieldRow, styles.fieldRowCenter]}
+                onPress={() => navigation.navigate('Authority')}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[Typography.body1, { color: colors.text }]}>Quản lý cộng đồng</Text>
+                  <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                    Đăng thông báo, điểm sơ tán, cứu hộ
+                  </Text>
+                </View>
+                <Ionicons name="megaphone-outline" size={18} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
         {/* Auth action */}
         <View style={styles.authBtnWrap}>
           {isAuthenticated ? (

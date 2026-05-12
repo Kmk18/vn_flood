@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Platform, LayoutAnimation } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT, MapType } from 'react-native-maps';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Platform, LayoutAnimation, ActivityIndicator } from 'react-native';
+import MapView, { Marker, Polygon, PROVIDER_DEFAULT, MapType } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
-import { useFloodStore, RISK_COLORS, RISK_LABELS, RiskLevel } from '../store/useFloodStore';
+import { useFloodStore, RISK_COLORS, RISK_COLORS_ALPHA, RISK_LABELS, RiskLevel } from '../store/useFloodStore';
+import basinPolygons from '../assets/vietnamBasinPolygons';
 import { BasinForecast } from '../mock/floodData';
 
 
@@ -43,7 +44,7 @@ const MAP_STYLES: { id: MapStyleId; label: string; icon: keyof typeof Ionicons.g
 
 export const MapScreen = () => {
   const { isDarkMode, colors: themeColors } = useTheme();
-  const { basins, selectedBasin, filterMinRisk, setSelectedBasin, setFilterMinRisk } = useFloodStore();
+  const { basins, selectedBasin, filterMinRisk, isLoading, setSelectedBasin, setFilterMinRisk } = useFloodStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -65,6 +66,14 @@ export const MapScreen = () => {
       : [],
     [basins, searchQuery]
   );
+
+  // keyed lookup used by polygon renderer to find prediction for each basin
+  const basinMap = useMemo(
+    () => new Map(basins.map((b) => [String(b.hybasId), b])),
+    [basins]
+  );
+
+  const hasPolygons = Object.keys(basinPolygons).length > 0;
 
   const handleSelectSuggestion = (basin: BasinForecast) => {
     setSelectedBasin(basin);
@@ -94,21 +103,48 @@ export const MapScreen = () => {
         zoomControlEnabled={false}
         onPress={dismissAll}
       >
-        {visibleBasins.map((basin) => {
-          return (
-            <Marker
-              key={basin.hybasId}
-              coordinate={{ latitude: basin.lat, longitude: basin.lon }}
-              pinColor={RISK_COLORS[basin.riskLevel]}
-              onPress={() => {
-                setShowSuggestions(false);
-                setShowSettings(false);
-                setSelectedBasin(basin);
-              }}
-            />
-          );
-        })}
+        {hasPolygons
+          ? Object.entries(basinPolygons).map(([id, poly]) => {
+              const basin = basinMap.get(id);
+              if (basin && RISK_ORDER.indexOf(basin.riskLevel) < minOrder) return null;
+              const fill   = basin ? RISK_COLORS_ALPHA[basin.riskLevel] : 'rgba(100,100,100,0.08)';
+              const stroke = basin ? RISK_COLORS[basin.riskLevel]       : 'rgba(150,150,150,0.3)';
+              return poly.parts.map((coords, i) => (
+                <Polygon
+                  key={`${id}-${i}`}
+                  coordinates={coords}
+                  fillColor={fill}
+                  strokeColor={stroke}
+                  strokeWidth={basin ? 1.5 : 0.5}
+                  tappable={!!basin}
+                  onPress={basin ? () => {
+                    setShowSuggestions(false);
+                    setShowSettings(false);
+                    setSelectedBasin(basin);
+                  } : undefined}
+                />
+              ));
+            })
+          : visibleBasins.map((basin) => (
+              <Marker
+                key={basin.hybasId}
+                coordinate={{ latitude: basin.lat, longitude: basin.lon }}
+                pinColor={RISK_COLORS[basin.riskLevel]}
+                onPress={() => {
+                  setShowSuggestions(false);
+                  setShowSettings(false);
+                  setSelectedBasin(basin);
+                }}
+              />
+            ))
+        }
       </MapView>
+
+      {isLoading && (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator size="large" color={themeColors.primary} />
+        </View>
+      )}
 
       {/* ── Search row ── */}
       <View style={GlobalStyles.mapSearchRow}>
@@ -359,6 +395,12 @@ export const MapScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  loadingOverlay: {
+    position: 'absolute',
+    top: '50%',
+    alignSelf: 'center',
+    zIndex: 10,
+  },
   mapStyleRow: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.l,
