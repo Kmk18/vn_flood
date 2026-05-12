@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import type { Redis } from 'ioredis';
-import { eq, and, gte, lte, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { db, basins, predictions } from '../../db';
 
 const RISK_ORDER = { low: 0, medium: 1, high: 2, critical: 3 };
@@ -36,6 +36,7 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
   });
 
   // GET /api/flood/predictions/today?risk_min=low|medium|high|critical
+  // Returns predictions for the latest available forecast date (may lag 1-2 days behind real-time)
   app.get('/api/flood/predictions/today', async (req: Request, res: Response) => {
     const riskMin = (req.query.risk_min as string) ?? 'low';
     const minOrder = RISK_ORDER[riskMin as keyof typeof RISK_ORDER] ?? 0;
@@ -49,6 +50,13 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
           .select({ runDate: sql<string>`max(${predictions.runDate})` })
           .from(predictions);
         const runDate = latestRun[0]?.runDate ?? today;
+
+        // Use the latest available forecast date (CHIRPS lags ~2 days so this may not be today)
+        const latestForecast = await db
+          .select({ forecastDate: sql<string>`max(${predictions.forecastDate})` })
+          .from(predictions)
+          .where(eq(predictions.runDate, runDate));
+        const forecastDate = latestForecast[0]?.forecastDate ?? today;
 
         const rows = await db
           .select({
@@ -64,7 +72,7 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
           .innerJoin(basins, eq(predictions.hybasId, basins.hybasId))
           .where(
             and(
-              eq(predictions.forecastDate, today),
+              eq(predictions.forecastDate, forecastDate),
               eq(predictions.runDate, runDate)
             )
           )
@@ -123,11 +131,10 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
     }
   });
 
-  // GET /api/flood/alerts — high/critical basins in next 3 days
+  // GET /api/flood/alerts — high/critical basins from the latest available run
   app.get('/api/flood/alerts', async (_req: Request, res: Response) => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const in3Days = new Date(Date.now() + 3 * 86400_000).toISOString().slice(0, 10);
 
       const data = await cached(redis, 'flood:alerts', CACHE_TTL.predictions, async () => {
         const latestRun = await db
@@ -150,8 +157,6 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
           .where(
             and(
               inArray(predictions.riskLevel, ['high', 'critical']),
-              gte(predictions.forecastDate, today),
-              lte(predictions.forecastDate, in3Days),
               eq(predictions.runDate, runDate)
             )
           )

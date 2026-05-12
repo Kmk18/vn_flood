@@ -1,0 +1,65 @@
+import type { Express, Request, Response } from 'express';
+
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL ?? 'http://localhost:8080';
+const IS_CLOUD_RUN = ML_SERVICE_URL.includes('run.app');
+
+// When running in Cloud Run, calls to other private Cloud Run services need a
+// Google-issued identity token (OIDC). The metadata server provides one for free.
+async function mlFetch(path: string, init: RequestInit = {}) {
+  if (!IS_CLOUD_RUN) return fetch(`${ML_SERVICE_URL}${path}`, init);
+
+  const tokenResp = await fetch(
+    `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=${encodeURIComponent(ML_SERVICE_URL)}`,
+    { headers: { 'Metadata-Flavor': 'Google' } },
+  );
+  const token = await tokenResp.text();
+  return fetch(`${ML_SERVICE_URL}${path}`, {
+    ...init,
+    headers: { ...(init.headers as Record<string, string> | undefined ?? {}), Authorization: `Bearer ${token}` },
+  });
+}
+
+export const registerIngestionRoutes = (app: Express) => {
+  app.post('/api/internal/ingest', async (req: Request, res: Response) => {
+    const secret = process.env.INGEST_SECRET;
+    if (secret && req.headers['x-ingest-secret'] !== secret) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const targetDate =
+      (req.body?.date as string | undefined) ??
+      new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
+
+    try {
+      const upstream = await mlFetch(`/ingest/${targetDate}`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(570_000), // 9.5 min — just under Cloud Run's 600s limit
+      });
+
+      if (!upstream.ok) {
+        const text = await upstream.text();
+        console.error('[ingestion] ML service error', upstream.status, text);
+        res.status(502).json({ error: 'ML service error', detail: text });
+        return;
+      }
+
+      const body = await upstream.json();
+      console.log('[ingestion] complete', body);
+      res.json(body);
+    } catch (err) {
+      console.error('[ingestion] fetch failed', err);
+      res.status(503).json({ error: 'ML service unreachable' });
+    }
+  });
+
+  app.get('/api/internal/ingest/status', async (_req: Request, res: Response) => {
+    try {
+      const upstream = await mlFetch('/health', { signal: AbortSignal.timeout(5_000) });
+      const body = await upstream.json();
+      res.json({ ml_service: body });
+    } catch {
+      res.status(503).json({ ml_service: 'unreachable' });
+    }
+  });
+};

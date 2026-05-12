@@ -29,12 +29,33 @@ export const basins = pgTable('basins', {
   lat: real('lat').notNull(),
   lon: real('lon').notNull(),
   province: varchar('province', { length: 100 }),
+  // 0=north 1=central 2=south
+  regionId: integer('region_id'),
   elevM: real('elev_m'),
   slopeDeg: real('slope_deg'),
+  twi: real('twi'),
   distRiverM: real('dist_river_m'),
-  basinAreaKm2: real('basin_area_km2'),
+  basinAreaKm2: real('basin_area_km2'),  // SUB_AREA in km²
+  upAreaKm2: real('up_area_km2'),        // UP_AREA in km² — upstream drainage
   riverOrder: integer('river_order'),
 });
+
+export const basinWeather = pgTable(
+  'basin_weather',
+  {
+    id: serial('id').primaryKey(),
+    hybasId: bigint('hybas_id', { mode: 'number' })
+      .notNull()
+      .references(() => basins.hybasId),
+    date: date('date').notNull(),
+    precipMm: real('precip_mm'),
+  },
+  (t) => [
+    unique().on(t.hybasId, t.date),
+    index('idx_bw_date').on(t.date),
+    index('idx_bw_basin').on(t.hybasId),
+  ]
+);
 
 export const predictions = pgTable(
   'predictions',
@@ -77,6 +98,17 @@ export const rescuePoints = pgTable('rescue_points', {
   isActive: boolean('is_active').notNull().default(true),
 });
 
+
+export const officialAlerts = pgTable('official_alerts', {
+  id: serial('id').primaryKey(),
+  title: varchar('title', { length: 200 }).notNull(),
+  message: varchar('message', { length: 1000 }).notNull(),
+  isUrgent: boolean('is_urgent').notNull().default(false),
+  province: varchar('province', { length: 100 }),
+  postedBy: integer('posted_by').references(() => users.id),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  isActive: boolean('is_active').notNull().default(true),
+});
 
 export const rescueRequests = pgTable('rescue_requests', {
   id: serial('id').primaryKey(),

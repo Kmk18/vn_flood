@@ -37,6 +37,7 @@ export const registerAuthRoutes = (app: Express, redis: Redis) => {
     }
     const { email, password, name } = result.data;
 
+
     const existing = await db
       .select({ id: users.id })
       .from(users)
@@ -73,6 +74,7 @@ export const registerAuthRoutes = (app: Express, redis: Redis) => {
   app.post('/api/auth/login', loginLimiter, async (req: Request, res: Response) => {
     const result = loginSchema.safeParse(req.body);
     if (!result.success) {
+      log('login:validation-fail', { issues: result.error.issues, body: JSON.stringify(req.body) });
       res.status(400).json({ error: result.error.issues });
       return;
     }

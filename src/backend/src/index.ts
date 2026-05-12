@@ -9,6 +9,10 @@ import { registerAuthRoutes } from './modules/auth/routes';
 import { registerUserRoutes } from './modules/users/routes';
 import { registerFloodRoutes } from './modules/flood/routes';
 import { registerForumRoutes } from './modules/forum/routes';
+import { registerIngestionRoutes } from './modules/ingestion/routes';
+import { registerRescueRoutes } from './modules/rescue/routes';
+import { registerAdminRoutes } from './modules/admin/routes';
+import { registerAlertsRoutes } from './modules/alerts/routes';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -46,6 +50,10 @@ registerAuthRoutes(app, redis);
 registerUserRoutes(app);
 registerFloodRoutes(app, redis);
 registerForumRoutes(app, redis);
+registerIngestionRoutes(app);
+registerRescueRoutes(app, redis);
+registerAdminRoutes(app);
+registerAlertsRoutes(app);
 
 app.listen(port, () => {
   // eslint-disable-next-line no-console
