@@ -13,6 +13,7 @@ import { registerIngestionRoutes } from './modules/ingestion/routes';
 import { registerRescueRoutes } from './modules/rescue/routes';
 import { registerAdminRoutes } from './modules/admin/routes';
 import { registerAlertsRoutes } from './modules/alerts/routes';
+import { registerChatRoutes } from './modules/chat/routes';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -54,6 +55,7 @@ registerIngestionRoutes(app);
 registerRescueRoutes(app, redis);
 registerAdminRoutes(app);
 registerAlertsRoutes(app);
+registerChatRoutes(app);
 
 app.listen(port, () => {
   // eslint-disable-next-line no-console
