@@ -13,7 +13,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "VNFlood cần vị trí của bạn để hiển thị bản đồ lũ gần bạn và chỉ đường đến điểm cứu hộ."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,13 +24,23 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "VNFlood cần vị trí của bạn để hiển thị bản đồ lũ gần bạn và chỉ đường đến điểm cứu hộ."
+        }
+      ]
     ]
   }
 }
