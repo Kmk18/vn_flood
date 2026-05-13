@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
   View, Text, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
+  TextStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Spacing, Typography } from '../theme';
@@ -15,6 +16,72 @@ interface Message {
   isBot: boolean;
   sources?: string[];
 }
+
+// ── Markdown helpers ──────────────────────────────────────────────────────────
+
+const parseInline = (text: string, base: TextStyle): React.ReactNode[] => {
+  const nodes: React.ReactNode[] = [];
+  const re = /\*\*([^*]+)\*\*|\*([^*]+)\*/g;
+  let cursor = 0;
+  let k = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > cursor)
+      nodes.push(<Text key={k++} style={base}>{text.slice(cursor, m.index)}</Text>);
+    nodes.push(
+      m[1] !== undefined
+        ? <Text key={k++} style={[base, { fontWeight: '700' }]}>{m[1]}</Text>
+        : <Text key={k++} style={[base, { fontStyle: 'italic' }]}>{m[2]}</Text>,
+    );
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < text.length)
+    nodes.push(<Text key={k++} style={base}>{text.slice(cursor)}</Text>);
+  return nodes;
+};
+
+const MarkdownBody = ({ text, textColor }: { text: string; textColor: string }) => {
+  const base: TextStyle = { fontSize: 15, lineHeight: 22, color: textColor };
+  const nodes: React.ReactNode[] = [];
+
+  text.split('\n').forEach((line, i) => {
+    const t = line.trim();
+    if (!t) {
+      nodes.push(<View key={i} style={{ height: 6 }} />);
+      return;
+    }
+
+    const hMatch = t.match(/^(#{1,3})\s+(.+)/);
+    if (hMatch) {
+      const sz = hMatch[1].length === 1 ? 17 : hMatch[1].length === 2 ? 16 : 15;
+      nodes.push(
+        <Text key={i} style={{ fontSize: sz, fontWeight: '700', color: textColor, lineHeight: sz * 1.45, marginTop: 6, marginBottom: 2 }}>
+          {hMatch[2]}
+        </Text>,
+      );
+      return;
+    }
+
+    const bMatch = t.match(/^[*\-]\s+(.+)/);
+    if (bMatch) {
+      nodes.push(
+        <View key={i} style={{ flexDirection: 'row', marginBottom: 3 }}>
+          <Text style={[base, { marginRight: 6 }]}>•</Text>
+          <Text style={[base, { flex: 1 }]}>{parseInline(bMatch[1], base)}</Text>
+        </View>,
+      );
+      return;
+    }
+
+    nodes.push(
+      <Text key={i} style={[base, { marginBottom: 2 }]}>{parseInline(t, base)}</Text>,
+    );
+  });
+
+  return <View>{nodes}</View>;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const SUGGESTED = [
   'Khu vực nào đang có nguy cơ lũ cao?',
@@ -88,9 +155,10 @@ export const ChatbotScreen = () => {
         style={[styles.row, isBot ? styles.rowBot : styles.rowUser, prevSame && { marginTop: 2 }]}
       >
         <View style={[styles.bubble, bubbleStyle]}>
-          <Text style={[Typography.body1, { color: isBot ? colors.text : '#FFF', lineHeight: 22 }]}>
-            {item.text}
-          </Text>
+          {isBot
+            ? <MarkdownBody text={item.text} textColor={colors.text} />
+            : <Text style={[Typography.body1, { color: '#FFF', lineHeight: 22 }]}>{item.text}</Text>
+          }
           {isBot && item.sources && (
             <View style={[styles.sources, { borderTopColor: isDarkMode ? colors.border : '#D8D8D8' }]}>
               <Text style={[Typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
