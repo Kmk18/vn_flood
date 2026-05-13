@@ -20,6 +20,8 @@ export const users = pgTable('users', {
   // 'user' | 'admin' | 'responder'
   role: varchar('role', { length: 20 }).notNull().default('user'),
   province: varchar('province', { length: 100 }),
+  phone: varchar('phone', { length: 20 }),
+  address: varchar('address', { length: 255 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

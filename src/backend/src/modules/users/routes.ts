@@ -5,29 +5,32 @@ import { db, users } from '../../db';
 import { requireAuth } from '../../middleware/requireAuth';
 
 const updateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name:     z.string().min(1).max(100).optional(),
   province: z.string().min(1).max(100).optional(),
+  phone:    z.string().regex(/^[0-9+\s\-().]{7,20}$/, 'Số điện thoại không hợp lệ').optional(),
+  address:  z.string().min(1).max(255).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'At least one field required' });
+
+const USER_SELECT = {
+  id:        users.id,
+  email:     users.email,
+  name:      users.name,
+  role:      users.role,
+  province:  users.province,
+  phone:     users.phone,
+  address:   users.address,
+  createdAt: users.createdAt,
+};
 
 export const registerUserRoutes = (app: Express) => {
   app.get('/api/users/me', requireAuth, async (req: Request, res: Response) => {
     const [user] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        role: users.role,
-        province: users.province,
-        createdAt: users.createdAt,
-      })
+      .select(USER_SELECT)
       .from(users)
       .where(eq(users.id, req.user!.sub))
       .limit(1);
 
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
+    if (!user) { res.status(404).json({ error: 'User not found' }); return; }
     res.json(user);
   });
 
@@ -42,13 +45,7 @@ export const registerUserRoutes = (app: Express) => {
       .update(users)
       .set({ ...result.data, updatedAt: new Date() })
       .where(eq(users.id, req.user!.sub))
-      .returning({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        role: users.role,
-        province: users.province,
-      });
+      .returning(USER_SELECT);
 
     res.json(user);
   });
