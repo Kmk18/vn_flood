@@ -38,6 +38,11 @@ const DARK_MAP_STYLE = [
 
 const RISK_ORDER: RiskLevel[] = ['low', 'medium', 'high', 'critical'];
 const VIETNAM_REGION = { latitude: 16.0, longitude: 107.5, latitudeDelta: 13.0, longitudeDelta: 9.0 };
+const HAS_POLYGONS = Object.keys(basinPolygons).length > 0;
+
+type Suggestion =
+  | { kind: 'basin';  data: BasinForecast }
+  | { kind: 'rescue'; data: RescuePoint };
 
 type MapStyleId = 'standard' | 'satellite' | 'hybrid';
 const MAP_STYLES: { id: MapStyleId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -87,10 +92,6 @@ export const MapScreen = () => {
     [basins, minOrder],
   );
 
-  type Suggestion =
-    | { kind: 'basin';  data: BasinForecast }
-    | { kind: 'rescue'; data: RescuePoint };
-
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase();
@@ -113,8 +114,6 @@ export const MapScreen = () => {
     [basins],
   );
 
-  const hasPolygons = Object.keys(basinPolygons).length > 0;
-
   // ── Location watch — only active when user has enabled shareLocation ────────
   useEffect(() => {
     let cancelled = false;
@@ -132,7 +131,7 @@ export const MapScreen = () => {
       if (cancelled || status !== 'granted') return;
       setLocationGranted(true);
       const sub = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 15 },
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 10_000, distanceInterval: 20 },
         (loc) => setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude }),
       );
       if (cancelled) { sub.remove(); return; }
@@ -245,7 +244,7 @@ export const MapScreen = () => {
     );
   };
 
-  const handleSelectRescue = (point: RescuePoint) => {
+  const handleSelectRescue = useCallback((point: RescuePoint) => {
     LayoutAnimation.configureNext(LAYOUT_ANIM);
     setSelectedRescue(point);
     activeRescueRef.current = point;
@@ -253,7 +252,7 @@ export const MapScreen = () => {
     setShowSuggestions(false);
     setShowSettings(false);
     setRoute(null);
-  };
+  }, []);
 
   const handleStartRoute = () => {
     if (selectedRescue) fetchRoute(selectedRescue);
@@ -275,6 +274,50 @@ export const MapScreen = () => {
     setShowSuggestions(false);
     setShowSettings(false);
   };
+
+  // Memoized so hundreds of polygons don't re-mount on every location tick / search keystroke
+  const polygonChildren = useMemo(() =>
+    Object.entries(basinPolygons).map(([id, poly]) => {
+      const basin = basinMap.get(id);
+      if (basin && RISK_ORDER.indexOf(basin.riskLevel) < minOrder) return null;
+      const fill   = basin ? RISK_COLORS_ALPHA[basin.riskLevel] : 'rgba(100,100,100,0.08)';
+      const stroke = basin ? RISK_COLORS[basin.riskLevel]       : 'rgba(150,150,150,0.3)';
+      return poly.parts.map((coords, i) => (
+        <Polygon
+          key={`${id}-${i}`}
+          coordinates={coords}
+          fillColor={fill}
+          strokeColor={stroke}
+          strokeWidth={basin ? 1.5 : 0.5}
+          tappable={!!basin}
+          onPress={basin ? () => {
+            setShowSuggestions(false);
+            setShowSettings(false);
+            setSelectedRescue(null);
+            setRoute(null);
+            activeRescueRef.current = null;
+            setSelectedBasin(basin);
+          } : undefined}
+        />
+      ));
+    }),
+  [basinMap, minOrder]);
+
+  // Memoized so custom-view markers don't re-render on location ticks
+  const rescueMarkers = useMemo(() =>
+    rescuePoints.map((point) => (
+      <Marker
+        key={`rescue-${point.id}`}
+        coordinate={{ latitude: point.lat, longitude: point.lon }}
+        onPress={() => handleSelectRescue(point)}
+        anchor={{ x: 0.5, y: 0.5 }}
+      >
+        <View style={styles.rescueMarker}>
+          <Ionicons name="medkit" size={14} color="#fff" />
+        </View>
+      </Marker>
+    )),
+  [rescuePoints, handleSelectRescue]);
 
   const bottomPanelOpen = (selectedBasin && !showSettings) || selectedRescue != null;
 
@@ -301,67 +344,29 @@ export const MapScreen = () => {
             coordinates={route.coords}
             strokeColor="#3b82f6"
             strokeWidth={4}
-            lineDashPattern={undefined}
             zIndex={10}
           />
         )}
 
         {/* Basin polygons / markers */}
-        {hasPolygons
-          ? Object.entries(basinPolygons).map(([id, poly]) => {
-              const basin = basinMap.get(id);
-              if (basin && RISK_ORDER.indexOf(basin.riskLevel) < minOrder) return null;
-              const fill   = basin ? RISK_COLORS_ALPHA[basin.riskLevel] : 'rgba(100,100,100,0.08)';
-              const stroke = basin ? RISK_COLORS[basin.riskLevel]       : 'rgba(150,150,150,0.3)';
-              return poly.parts.map((coords, i) => (
-                <Polygon
-                  key={`${id}-${i}`}
-                  coordinates={coords}
-                  fillColor={fill}
-                  strokeColor={stroke}
-                  strokeWidth={basin ? 1.5 : 0.5}
-                  tappable={!!basin}
-                  onPress={basin ? () => {
-                    setShowSuggestions(false);
-                    setShowSettings(false);
-                    setSelectedRescue(null);
-                    setRoute(null);
-                    activeRescueRef.current = null;
-                    setSelectedBasin(basin);
-                  } : undefined}
-                />
-              ));
-            })
-          : visibleBasins.map((basin) => (
-              <Marker
-                key={basin.hybasId}
-                coordinate={{ latitude: basin.lat, longitude: basin.lon }}
-                pinColor={RISK_COLORS[basin.riskLevel]}
-                onPress={() => {
-                  setShowSuggestions(false);
-                  setShowSettings(false);
-                  setSelectedRescue(null);
-                  setRoute(null);
-                  activeRescueRef.current = null;
-                  setSelectedBasin(basin);
-                }}
-              />
-            ))
-        }
+        {HAS_POLYGONS ? polygonChildren : visibleBasins.map((basin) => (
+          <Marker
+            key={basin.hybasId}
+            coordinate={{ latitude: basin.lat, longitude: basin.lon }}
+            pinColor={RISK_COLORS[basin.riskLevel]}
+            onPress={() => {
+              setShowSuggestions(false);
+              setShowSettings(false);
+              setSelectedRescue(null);
+              setRoute(null);
+              activeRescueRef.current = null;
+              setSelectedBasin(basin);
+            }}
+          />
+        ))}
 
         {/* Rescue point markers */}
-        {rescuePoints.map((point) => (
-          <Marker
-            key={`rescue-${point.id}`}
-            coordinate={{ latitude: point.lat, longitude: point.lon }}
-            onPress={() => handleSelectRescue(point)}
-            anchor={{ x: 0.5, y: 0.5 }}
-          >
-            <View style={styles.rescueMarker}>
-              <Ionicons name="medkit" size={14} color="#fff" />
-            </View>
-          </Marker>
-        ))}
+        {rescueMarkers}
       </MapView>
 
       {isLoading && (
