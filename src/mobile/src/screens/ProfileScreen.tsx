@@ -54,6 +54,20 @@ export const ProfileScreen = () => {
                   {user?.province || 'Chưa cập nhật'}
                 </Text>
               </View>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View style={styles.fieldRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary }]}>NƠI CƯ TRÚ</Text>
+                <Text style={[Typography.body1, { color: colors.text, flex: 1, textAlign: 'right' }]} numberOfLines={2}>
+                  {user?.address || 'Chưa cập nhật'}
+                </Text>
+              </View>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View style={styles.fieldRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary }]}>SĐT</Text>
+                <Text style={[Typography.body1, { color: colors.text, flex: 1, textAlign: 'right' }]} numberOfLines={1}>
+                  {user?.phone || 'Chưa cập nhật'}
+                </Text>
+              </View>
             </>
           ) : (
             <View style={styles.fieldRow}>

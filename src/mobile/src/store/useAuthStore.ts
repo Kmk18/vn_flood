@@ -9,6 +9,8 @@ export interface User {
   name: string | null;
   role: string;
   province: string | null;
+  phone: string | null;
+  address: string | null;
 }
 
 interface AuthState {

@@ -1,9 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import {
+  View, Text, KeyboardAvoidingView, Platform,
+  ScrollView, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useTheme } from '../theme/useTheme';
+import { chatApi } from '../api/chat';
 
 interface Message {
   id: string;
@@ -12,46 +16,61 @@ interface Message {
   sources?: string[];
 }
 
+const SUGGESTED = [
+  'Khu vực nào đang có nguy cơ lũ cao?',
+  'Tôi cần chuẩn bị gì trước lũ?',
+  'Phải làm gì khi mức rủi ro nguy hiểm?',
+  'Số điện thoại khẩn cấp là gì?',
+];
+
 export const ChatbotScreen = () => {
   const { isDarkMode, colors } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
 
   const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: 'Xin chào! Tôi là trợ lý VNFlood. Tôi có thể giúp gì cho bạn hôm nay?', isBot: true },
+    { id: '0', text: 'Xin chào! Tôi là trợ lý VNFlood. Tôi có thể giúp gì cho bạn hôm nay?', isBot: true },
   ]);
+  const hasSentMessage = messages.length > 1;
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
-    const userMsg: Message = { id: Date.now().toString(), text: inputText.trim(), isBot: false };
+    const userMsg: Message = { id: Date.now().toString(), text: text.trim(), isBot: false };
     setMessages((prev) => [...prev, userMsg]);
     setInputText('');
+    setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      const { reply, sources } = await chatApi.send(text.trim());
       const botMsg: Message = {
         id: (Date.now() + 1).toString(),
-        text: 'Mực nước sông hiện tại đang ổn định, nhưng dự kiến sẽ có mưa lớn vào tối nay.',
+        text: reply,
         isBot: true,
-        sources: ['Trung tâm Dự báo Khí tượng Thủy văn Quốc gia', 'Trạm Nước Địa phương Alpha'],
+        sources: sources.length ? sources : undefined,
       };
       setMessages((prev) => [...prev, botMsg]);
-    }, 1000);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { id: (Date.now() + 1).toString(), text: 'Xin lỗi, không thể kết nối. Vui lòng thử lại.', isBot: true },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const renderMessage = (item: Message, index: number) => {
     const isBot = item.isBot;
-    const prevSameSender = index > 0 && messages[index - 1].isBot === isBot;
-    const nextSameSender = index < messages.length - 1 && messages[index + 1].isBot === isBot;
-
-    const radiusTop = prevSameSender ? 6 : 18;
-    const radiusBottom = nextSameSender ? 6 : 18;
+    const prevSame = index > 0 && messages[index - 1].isBot === isBot;
+    const nextSame = index < messages.length - 1 && messages[index + 1].isBot === isBot;
 
     const bubbleStyle = isBot
       ? {
           backgroundColor: isDarkMode ? colors.card : '#F0F0F0',
-          borderTopLeftRadius: radiusTop,
-          borderBottomLeftRadius: radiusBottom,
+          borderTopLeftRadius: prevSame ? 6 : 18,
+          borderBottomLeftRadius: nextSame ? 6 : 18,
           borderTopRightRadius: 18,
           borderBottomRightRadius: 18,
         }
@@ -59,14 +78,14 @@ export const ChatbotScreen = () => {
           backgroundColor: colors.primary,
           borderTopLeftRadius: 18,
           borderBottomLeftRadius: 18,
-          borderTopRightRadius: radiusTop,
-          borderBottomRightRadius: radiusBottom,
+          borderTopRightRadius: prevSame ? 6 : 18,
+          borderBottomRightRadius: nextSame ? 6 : 18,
         };
 
     return (
       <View
         key={item.id}
-        style={[styles.row, isBot ? styles.rowBot : styles.rowUser, prevSameSender && { marginTop: 2 }]}
+        style={[styles.row, isBot ? styles.rowBot : styles.rowUser, prevSame && { marginTop: 2 }]}
       >
         <View style={[styles.bubble, bubbleStyle]}>
           <Text style={[Typography.body1, { color: isBot ? colors.text : '#FFF', lineHeight: 22 }]}>
@@ -109,29 +128,49 @@ export const ChatbotScreen = () => {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.map((item, index) => renderMessage(item, index))}
+
+          {isLoading && (
+            <View style={[styles.row, styles.rowBot]}>
+              <View style={[styles.bubble, { backgroundColor: isDarkMode ? colors.card : '#F0F0F0', borderRadius: 18 }]}>
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            </View>
+          )}
+
+          {!hasSentMessage && (
+            <View style={styles.suggestions}>
+              {SUGGESTED.map((q) => (
+                <TouchableOpacity
+                  key={q}
+                  style={[styles.chip, { backgroundColor: isDarkMode ? colors.card : '#EEF2FF', borderColor: colors.primary }]}
+                  onPress={() => sendMessage(q)}
+                >
+                  <Text style={[Typography.caption, { color: colors.primary }]}>{q}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </ScrollView>
 
         <View style={[styles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
           <TextInput
             style={[
               styles.textInput,
-              {
-                backgroundColor: isDarkMode ? colors.card : '#F0F0F0',
-                color: colors.text,
-              },
+              { backgroundColor: isDarkMode ? colors.card : '#F0F0F0', color: colors.text },
             ]}
             placeholder="Nhập câu hỏi..."
             placeholderTextColor={colors.textSecondary}
             value={inputText}
             onChangeText={setInputText}
-            onSubmitEditing={handleSend}
+            onSubmitEditing={() => sendMessage(inputText)}
             returnKeyType="send"
             multiline
+            editable={!isLoading}
           />
           <TouchableOpacity
-            style={[styles.sendBtn, { backgroundColor: inputText.trim() ? colors.primary : colors.border }]}
-            onPress={handleSend}
-            disabled={!inputText.trim()}
+            style={[styles.sendBtn, { backgroundColor: inputText.trim() && !isLoading ? colors.primary : colors.border }]}
+            onPress={() => sendMessage(inputText)}
+            disabled={!inputText.trim() || isLoading}
           >
             <Text style={styles.sendIcon}>↑</Text>
           </TouchableOpacity>
@@ -168,12 +207,8 @@ const styles = StyleSheet.create({
     marginTop: Spacing.s,
     alignItems: 'flex-end',
   },
-  rowBot: {
-    justifyContent: 'flex-start',
-  },
-  rowUser: {
-    justifyContent: 'flex-end',
-  },
+  rowBot:  { justifyContent: 'flex-start' },
+  rowUser: { justifyContent: 'flex-end' },
   bubble: {
     maxWidth: '75%',
     paddingHorizontal: Spacing.m,
@@ -183,6 +218,17 @@ const styles = StyleSheet.create({
     marginTop: Spacing.s,
     paddingTop: Spacing.s,
     borderTopWidth: 1,
+  },
+  suggestions: {
+    marginTop: Spacing.l,
+    gap: Spacing.s,
+  },
+  chip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   inputRow: {
     flexDirection: 'row',
