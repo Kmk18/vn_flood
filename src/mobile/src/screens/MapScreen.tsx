@@ -87,12 +87,26 @@ export const MapScreen = () => {
     [basins, minOrder],
   );
 
-  const suggestions: BasinForecast[] = useMemo(
-    () => searchQuery.trim().length > 0
-      ? basins.filter((b) => b.province.toLowerCase().includes(searchQuery.toLowerCase()))
-      : [],
-    [basins, searchQuery],
-  );
+  type Suggestion =
+    | { kind: 'basin';  data: BasinForecast }
+    | { kind: 'rescue'; data: RescuePoint };
+
+  const suggestions = useMemo<Suggestion[]>(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    const basinHits: Suggestion[] = basins
+      .filter((b) => (b.province?.toLowerCase() ?? '').includes(q))
+      .map((b) => ({ kind: 'basin', data: b }));
+    const rescueHits: Suggestion[] = rescuePoints
+      .filter((p) =>
+        (p.name?.toLowerCase() ?? '').includes(q) ||
+        (p.province?.toLowerCase() ?? '').includes(q) ||
+        (p.address?.toLowerCase() ?? '').includes(q),
+      )
+      .slice(0, 5)
+      .map((p) => ({ kind: 'rescue', data: p }));
+    return [...basinHits, ...rescueHits].slice(0, 12);
+  }, [basins, rescuePoints, searchQuery]);
 
   const basinMap = useMemo(
     () => new Map(basins.map((b) => [String(b.hybasId), b])),
@@ -196,6 +210,20 @@ export const MapScreen = () => {
     setSelectedBasin(basin);
     setSearchQuery(basin.province);
     setShowSuggestions(false);
+    mapRef.current?.animateToRegion(
+      { latitude: basin.lat, longitude: basin.lon, latitudeDelta: 0.5, longitudeDelta: 0.5 },
+      600,
+    );
+  };
+
+  const handleSelectRescueSuggestion = (point: RescuePoint) => {
+    setSearchQuery(point.name);
+    setShowSuggestions(false);
+    handleSelectRescue(point);
+    mapRef.current?.animateToRegion(
+      { latitude: point.lat, longitude: point.lon, latitudeDelta: 0.05, longitudeDelta: 0.05 },
+      600,
+    );
   };
 
   const handleMyLocation = () => {
@@ -377,21 +405,35 @@ export const MapScreen = () => {
       {/* ── Search suggestions ── */}
       {showSuggestions && suggestions.length > 0 && (
         <View style={[GlobalStyles.mapSuggestions, { backgroundColor: themeColors.card }]}>
-          {suggestions.map((basin, i) => (
+          {suggestions.map((s, i) => (
             <TouchableOpacity
-              key={basin.hybasId}
+              key={s.kind === 'basin' ? `b-${s.data.hybasId}` : `r-${s.data.id}`}
               style={[
                 GlobalStyles.mapSuggestionRow,
                 { borderBottomColor: themeColors.border },
                 i === suggestions.length - 1 && { borderBottomWidth: 0 },
               ]}
-              onPress={() => handleSelectSuggestion(basin)}
+              onPress={() =>
+                s.kind === 'basin'
+                  ? handleSelectSuggestion(s.data)
+                  : handleSelectRescueSuggestion(s.data)
+              }
             >
-              <View style={[GlobalStyles.mapSuggestionDot, { backgroundColor: RISK_COLORS[basin.riskLevel] }]} />
+              {s.kind === 'basin' ? (
+                <View style={[GlobalStyles.mapSuggestionDot, { backgroundColor: RISK_COLORS[s.data.riskLevel] }]} />
+              ) : (
+                <View style={[styles.suggestionRescueIcon]}>
+                  <Ionicons name="medkit" size={10} color="#fff" />
+                </View>
+              )}
               <View style={{ flex: 1 }}>
-                <Text style={[Typography.body1, { color: themeColors.text }]}>{basin.province}</Text>
+                <Text style={[Typography.body1, { color: themeColors.text }]}>
+                  {s.kind === 'basin' ? s.data.province : s.data.name}
+                </Text>
                 <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
-                  {RISK_LABELS[basin.riskLevel]} · {(basin.floodProb * 100).toFixed(0)}% xác suất lũ
+                  {s.kind === 'basin'
+                    ? `${RISK_LABELS[s.data.riskLevel]} · ${(s.data.floodProb * 100).toFixed(0)}% xác suất lũ`
+                    : `Điểm cứu hộ · ${s.data.province}`}
                 </Text>
               </View>
               <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>›</Text>
@@ -685,6 +727,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
     zIndex: 20,
+  },
+  suggestionRescueIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   rescueMarker: {
     width: 28,
