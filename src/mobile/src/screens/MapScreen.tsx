@@ -95,6 +95,7 @@ export const MapScreen = () => {
   // Rescue points + routing
   const [rescuePoints, setRescuePoints]     = useState<RescuePoint[]>([]);
   const [selectedRescue, setSelectedRescue] = useState<RescuePoint | null>(null);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [route, setRoute]                   = useState<RouteInfo | null>(null);
   const [isRouting, setIsRouting]           = useState(false);
 
@@ -193,6 +194,7 @@ export const MapScreen = () => {
       };
       LayoutAnimation.configureNext(LAYOUT_ANIM);
       setSelectedRescue(point);
+      setPanelCollapsed(false);
       activeRescueRef.current = point;
       setSelectedBasin(null);
       setShowSuggestions(false);
@@ -299,6 +301,7 @@ export const MapScreen = () => {
   const handleSelectRescue = useCallback((point: RescuePoint) => {
     LayoutAnimation.configureNext(LAYOUT_ANIM);
     setSelectedRescue(point);
+    setPanelCollapsed(false);
     activeRescueRef.current = point;
     setSelectedBasin(null);
     setShowSuggestions(false);
@@ -308,12 +311,6 @@ export const MapScreen = () => {
 
   const handleStartRoute = () => {
     if (selectedRescue) fetchRoute(selectedRescue);
-  };
-
-  const handleDismissPanel = () => {
-    LayoutAnimation.configureNext(LAYOUT_ANIM);
-    setSelectedRescue(null);
-    // route stays on the map until explicitly cleared
   };
 
   const handleClearRoute = () => {
@@ -386,7 +383,8 @@ export const MapScreen = () => {
     )),
   [rescuePoints, handleSelectRescue]);
 
-  const bottomPanelOpen = (selectedBasin && !showSettings) || selectedRescue != null;
+  const panelFullOpen = (selectedBasin && !showSettings) || (selectedRescue != null && !panelCollapsed);
+  const fabOffset = panelFullOpen ? 260 : (selectedRescue != null && panelCollapsed) ? 64 : Spacing.xl;
 
   return (
     <View style={GlobalStyles.container}>
@@ -524,7 +522,7 @@ export const MapScreen = () => {
             styles.locationFab,
             {
               backgroundColor: showRescueRequests ? '#E74C3C' : themeColors.card,
-              bottom: bottomPanelOpen ? 260 + 52 : Spacing.xl + 52,
+              bottom: fabOffset + 52,
             },
           ]}
           onPress={() => setShowRescueRequests((v) => !v)}
@@ -538,7 +536,7 @@ export const MapScreen = () => {
       <TouchableOpacity
         style={[
           styles.locationFab,
-          { backgroundColor: themeColors.card, bottom: bottomPanelOpen ? 260 : Spacing.xl },
+          { backgroundColor: themeColors.card, bottom: fabOffset },
         ]}
         onPress={handleMyLocation}
         activeOpacity={0.8}
@@ -602,78 +600,98 @@ export const MapScreen = () => {
       {selectedRescue && !showSettings && (
         <View style={[GlobalStyles.mapPanel, { backgroundColor: themeColors.card, bottom: 0 }]}>
           <View style={[GlobalStyles.mapPanelAccent, { backgroundColor: '#22c55e' }]} />
-          <View style={[GlobalStyles.mapPanelContent, { paddingBottom: Spacing.l }]}>
-            <View style={GlobalStyles.mapPanelHeader}>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="medkit" size={14} color="#22c55e" />
-                  <Text style={[Typography.label, { color: '#22c55e' }]}>ĐIỂM CỨU HỘ</Text>
-                </View>
-                <Text style={[Typography.h3, { color: themeColors.text, marginTop: 2 }]} numberOfLines={2}>
-                  {selectedRescue.name}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={handleDismissPanel}
-                style={GlobalStyles.mapCloseBtn}
-              >
-                <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
 
-            {selectedRescue.address ? (
-              <Text style={[Typography.body2, { color: themeColors.textSecondary, marginTop: Spacing.xs }]} numberOfLines={2}>
-                {selectedRescue.address}
+          {panelCollapsed ? (
+            /* ── Collapsed tab ── */
+            <TouchableOpacity
+              style={styles.collapsedTab}
+              onPress={() => { LayoutAnimation.configureNext(LAYOUT_ANIM); setPanelCollapsed(false); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="medkit" size={14} color="#22c55e" />
+              <Text style={[Typography.body2, { color: themeColors.text, flex: 1, marginLeft: Spacing.s, fontWeight: '600' }]} numberOfLines={1}>
+                {selectedRescue.name}
               </Text>
-            ) : null}
-            {selectedRescue.capacity ? (
-              <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: 2 }]}>
-                Sức chứa: {selectedRescue.capacity} người
-              </Text>
-            ) : null}
-
-            {/* Route info */}
-            {route && (
-              <View style={styles.routeInfo}>
-                <Ionicons name="navigate" size={14} color="#3b82f6" />
-                <Text style={[Typography.body2, { color: '#3b82f6', marginLeft: 4 }]}>
+              {route && (
+                <Text style={[Typography.caption, { color: '#3b82f6', marginRight: Spacing.xs }]}>
                   {route.distanceKm} km · {route.durationMin} phút
                 </Text>
+              )}
+              <Ionicons name="chevron-up" size={22} color={themeColors.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            /* ── Expanded content ── */
+            <View style={[GlobalStyles.mapPanelContent, { paddingBottom: Spacing.l }]}>
+              <View style={GlobalStyles.mapPanelHeader}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="medkit" size={14} color="#22c55e" />
+                    <Text style={[Typography.label, { color: '#22c55e' }]}>ĐIỂM CỨU HỘ</Text>
+                  </View>
+                  <Text style={[Typography.h3, { color: themeColors.text, marginTop: 2 }]} numberOfLines={2}>
+                    {selectedRescue.name}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => { LayoutAnimation.configureNext(LAYOUT_ANIM); setPanelCollapsed(true); }}
+                  style={GlobalStyles.mapCloseBtn}
+                >
+                  <Ionicons name="chevron-down" size={22} color={themeColors.textSecondary} />
+                </TouchableOpacity>
               </View>
-            )}
 
-            <View style={[GlobalStyles.mapDivider, { backgroundColor: themeColors.border }]} />
-
-            {/* Direction buttons */}
-            <View style={styles.routeBtnRow}>
-              <TouchableOpacity
-                style={[styles.routeBtn, { backgroundColor: '#3b82f6' }]}
-                onPress={handleStartRoute}
-                disabled={isRouting}
-                activeOpacity={0.8}
-              >
-                {isRouting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="navigate-outline" size={16} color="#fff" />
-                    <Text style={styles.routeBtnText}>{route ? 'Cập nhật' : 'Chỉ đường'}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {selectedRescue.address ? (
+                <Text style={[Typography.body2, { color: themeColors.textSecondary, marginTop: Spacing.xs }]} numberOfLines={2}>
+                  {selectedRescue.address}
+                </Text>
+              ) : null}
+              {selectedRescue.capacity ? (
+                <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: 2 }]}>
+                  Sức chứa: {selectedRescue.capacity} người
+                </Text>
+              ) : null}
 
               {route && (
+                <View style={styles.routeInfo}>
+                  <Ionicons name="navigate" size={14} color="#3b82f6" />
+                  <Text style={[Typography.body2, { color: '#3b82f6', marginLeft: 4 }]}>
+                    {route.distanceKm} km · {route.durationMin} phút
+                  </Text>
+                </View>
+              )}
+
+              <View style={[GlobalStyles.mapDivider, { backgroundColor: themeColors.border }]} />
+
+              <View style={styles.routeBtnRow}>
                 <TouchableOpacity
-                  style={[styles.routeBtn, { backgroundColor: themeColors.secondary, borderWidth: 1, borderColor: themeColors.border }]}
-                  onPress={handleClearRoute}
+                  style={[styles.routeBtn, { backgroundColor: '#3b82f6' }]}
+                  onPress={handleStartRoute}
+                  disabled={isRouting}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="close-circle-outline" size={16} color={themeColors.text} />
-                  <Text style={[styles.routeBtnText, { color: themeColors.text }]}>Xóa đường</Text>
+                  {isRouting ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="navigate-outline" size={16} color="#fff" />
+                      <Text style={styles.routeBtnText}>{route ? 'Cập nhật' : 'Chỉ đường'}</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
-              )}
+
+                {route && (
+                  <TouchableOpacity
+                    style={[styles.routeBtn, { backgroundColor: themeColors.secondary, borderWidth: 1, borderColor: themeColors.border }]}
+                    onPress={handleClearRoute}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="close-circle-outline" size={16} color={themeColors.text} />
+                    <Text style={[styles.routeBtnText, { color: themeColors.text }]}>Xóa đường</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-          </View>
+          )}
         </View>
       )}
 
@@ -883,5 +901,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1.5,
     gap: 2,
+  },
+  collapsedTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.m,
+    gap: Spacing.xs,
   },
 });
