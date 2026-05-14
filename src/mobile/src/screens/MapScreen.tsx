@@ -297,19 +297,10 @@ export const MapScreen = () => {
           fillColor={fill}
           strokeColor={stroke}
           strokeWidth={1.5}
-          tappable
-          onPress={() => {
-            setShowSuggestions(false);
-            setShowSettings(false);
-            setSelectedRescue(null);
-            setRoute(null);
-            activeRescueRef.current = null;
-            setSelectedBasin(basin);
-          }}
         />
       ));
     }),
-  [basinMap, minOrder]);
+  [basinMap, minOrder]); // no onPress — polygons are display-only
 
   // Memoized so custom-view markers don't re-render on location ticks
   const rescueMarkers = useMemo(() =>
