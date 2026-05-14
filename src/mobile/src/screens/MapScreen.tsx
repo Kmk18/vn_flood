@@ -13,6 +13,8 @@ import { GlobalStyles } from '../theme/globalStyles';
 import { useNavigation } from '@react-navigation/native';
 import { useFloodStore, RISK_COLORS, RISK_COLORS_ALPHA, RISK_LABELS, RiskLevel } from '../store/useFloodStore';
 import { useLocationStore } from '../store/useLocationStore';
+import { useAuthStore } from '../store/useAuthStore';
+import { useResponderStore } from '../store/useResponderStore';
 import basinPolygons from '../assets/vietnamBasinPolygons';
 import { BasinForecast } from '../mock/floodData';
 import { rescueApi, RescuePoint } from '../api/rescue';
@@ -58,10 +60,18 @@ interface RouteInfo {
   durationMin: number;
 }
 
+const REQUEST_PIN_COLOR: Record<string, string> = {
+  open: '#E74C3C',
+  assigned: '#F39C12',
+};
+
 export const MapScreen = () => {
   const navigation = useNavigation();
   const { isDarkMode, colors: themeColors } = useTheme();
   const { basins, selectedBasin, filterMinRisk, isLoading, fetchData, setSelectedBasin, setFilterMinRisk } = useFloodStore();
+  const user = useAuthStore((s) => s.user);
+  const isResponder = user?.role === 'responder' || user?.role === 'admin';
+  const { pendingNav, setPendingNav } = useResponderStore();
 
   // Re-fetch when the map tab is focused (respects 5-min cooldown in the store)
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
@@ -77,6 +87,10 @@ export const MapScreen = () => {
   // Location
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationGranted, setLocationGranted] = useState(false);
+
+  // Rescue requests overlay (responder/admin only)
+  const [rescueRequests, setRescueRequests]     = useState<import('../api/rescue').RescueRequest[]>([]);
+  const [showRescueRequests, setShowRescueRequests] = useState(true);
 
   // Rescue points + routing
   const [rescuePoints, setRescuePoints]     = useState<RescuePoint[]>([]);
@@ -154,6 +168,39 @@ export const MapScreen = () => {
   useEffect(() => {
     rescueApi.getPoints().then(setRescuePoints).catch(() => {});
   }, []);
+
+  // ── Load open rescue requests (responder/admin only) ───────────────────────
+  const loadRescueRequests = useCallback(async () => {
+    if (!isResponder) return;
+    rescueApi.getAllRequests().then(setRescueRequests).catch(() => {});
+  }, [isResponder]);
+
+  useEffect(() => { loadRescueRequests(); }, [loadRescueRequests]);
+
+  // On focus: refresh requests + handle accepted request routed back from ResponderScreen
+  useFocusEffect(useCallback(() => {
+    loadRescueRequests();
+    if (pendingNav) {
+      const point: RescuePoint = {
+        id: pendingNav.id,
+        name: pendingNav.label,
+        lat: pendingNav.lat,
+        lon: pendingNav.lon,
+        capacity: 0,
+        province: '',
+        address: '',
+        isActive: true,
+      };
+      LayoutAnimation.configureNext(LAYOUT_ANIM);
+      setSelectedRescue(point);
+      activeRescueRef.current = point;
+      setSelectedBasin(null);
+      setShowSuggestions(false);
+      setShowSettings(false);
+      setRoute(null);
+      setPendingNav(null);
+    }
+  }, [loadRescueRequests, pendingNav, setPendingNav, setSelectedBasin]));
 
   // ── OSRM routing ───────────────────────────────────────────────────────────
   const fetchRoute = useCallback(async (dest: RescuePoint, showLoader = true) => {
@@ -302,6 +349,21 @@ export const MapScreen = () => {
     }),
   [basinMap, minOrder]); // no onPress — polygons are display-only
 
+  // Rescue request pins for responder/admin
+  const requestMarkers = useMemo(() =>
+    rescueRequests
+      .filter((r) => r.status !== 'resolved')
+      .map((r) => (
+        <Marker
+          key={`req-${r.id}`}
+          coordinate={{ latitude: r.lat, longitude: r.lon }}
+          pinColor={REQUEST_PIN_COLOR[r.status] ?? '#E74C3C'}
+          title={`Yêu cầu #${r.id}`}
+          description={`${r.peopleCount} người · ${r.status === 'open' ? 'Chờ xử lý' : 'Đang xử lý'}`}
+        />
+      )),
+  [rescueRequests]);
+
   // Memoized so custom-view markers don't re-render on location ticks
   const rescueMarkers = useMemo(() =>
     rescuePoints.map((point) => (
@@ -364,8 +426,10 @@ export const MapScreen = () => {
           />
         ))}
 
-        {/* Rescue point markers */}
-        {rescueMarkers}
+        {/* Rescue request pins (responder/admin only) */}
+        {isResponder && showRescueRequests && requestMarkers}
+
+        {/* Rescue point markers — hidden for performance */}
       </MapView>
 
 
@@ -445,6 +509,23 @@ export const MapScreen = () => {
             </TouchableOpacity>
           ))}
         </View>
+      )}
+
+      {/* ── Rescue requests toggle FAB (responder/admin only) ── */}
+      {isResponder && (
+        <TouchableOpacity
+          style={[
+            styles.locationFab,
+            {
+              backgroundColor: showRescueRequests ? '#E74C3C' : themeColors.card,
+              bottom: bottomPanelOpen ? 260 + 52 : Spacing.xl + 52,
+            },
+          ]}
+          onPress={() => setShowRescueRequests((v) => !v)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="people" size={20} color={showRescueRequests ? '#fff' : themeColors.textSecondary} />
+        </TouchableOpacity>
       )}
 
       {/* ── My Location FAB ── */}

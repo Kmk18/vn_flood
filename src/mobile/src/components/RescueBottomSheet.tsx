@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Animated,
-  Dimensions, StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
+  Dimensions, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
+import * as Location from 'expo-location';
+import { useNavigation } from '@react-navigation/native';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { rescueApi, RescuePoint } from '../api/rescue';
+import { useLocationStore } from '../store/useLocationStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.56);
@@ -17,6 +20,9 @@ interface Props {
 
 export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
   const { colors: themeColors } = useTheme();
+  const navigation = useNavigation<any>();
+  const shareLocation = useLocationStore((s) => s.shareLocation);
+  const locationRef = useRef<{ lat: number; lon: number } | null>(null);
 
   const [mounted, setMounted] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -32,11 +38,16 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
   const holdProgress = useRef(new Animated.Value(0)).current;
   const holdAnim = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Fetch shelter points once when the sheet opens
+  // Fetch shelter points + get GPS location when the sheet opens
   useEffect(() => {
     if (!visible) return;
     rescueApi.getPoints().then(setShelters).catch(() => {});
-  }, [visible]);
+    if (shareLocation) {
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        .then((loc) => { locationRef.current = { lat: loc.coords.latitude, lon: loc.coords.longitude }; })
+        .catch(() => {});
+    }
+  }, [visible, shareLocation]);
 
   // Mount before animating in; unmount only after animating out
   useEffect(() => {
@@ -85,6 +96,17 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
 
   const onPressIn = () => {
     if (submitted) return;
+    if (!shareLocation || !locationRef.current) {
+      Alert.alert(
+        'Cần bật vị trí',
+        'Bật chia sẻ vị trí để đội cứu hộ biết chính xác nơi bạn cần giúp đỡ.',
+        [
+          { text: 'Đóng', style: 'cancel' },
+          { text: 'Mở Cài đặt', onPress: () => { onClose(); navigation.navigate('AppSettings'); } },
+        ],
+      );
+      return;
+    }
     holdProgress.setValue(0);
     holdAnim.current = Animated.timing(holdProgress, {
       toValue: 1,
@@ -94,8 +116,9 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
     holdAnim.current.start(({ finished }) => {
       if (finished) {
         setSubmitted(true);
-        rescueApi.createRequest({ lat: 0, lon: 0, peopleCount: 1, notes: description || undefined })
-          .catch(() => {}); // fire-and-forget; submission confirmed locally
+        const { lat, lon } = locationRef.current!;
+        rescueApi.createRequest({ lat, lon, peopleCount: 1, notes: description || undefined })
+          .catch(() => {});
       }
     });
   };

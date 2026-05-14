@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { rescueApi, RescuePoint, RescueRequest } from '../api/rescue';
+import { useResponderStore } from '../store/useResponderStore';
 
 type ResponderTab = 'requests' | 'points';
 
@@ -54,6 +55,7 @@ export const ResponderScreen = () => {
   const [requests, setRequests] = useState<RescueRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const setPendingNav = useResponderStore((s) => s.setPendingNav);
 
   // Points
   const [points, setPoints] = useState<RescuePoint[]>([]);
@@ -94,9 +96,9 @@ export const ResponderScreen = () => {
   const handleAccept = async (req: RescueRequest) => {
     setUpdatingId(req.id);
     try {
-      const updated = await rescueApi.updateStatus(req.id, 'assigned');
-      setRequests((prev) => prev.map((r) => r.id === req.id ? updated : r));
-      openNavigation(req.lat, req.lon);
+      await rescueApi.updateStatus(req.id, 'assigned');
+      setPendingNav({ id: req.id, lat: req.lat, lon: req.lon, label: `Yêu cầu #${req.id}` });
+      navigation.goBack();
     } catch {
       Alert.alert('Lỗi', 'Không thể tiếp nhận. Thử lại.');
     }
