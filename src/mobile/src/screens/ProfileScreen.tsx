@@ -148,19 +148,36 @@ export const ProfileScreen = () => {
                   <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 </>
               )}
-              <TouchableOpacity
-                style={[styles.fieldRow, styles.fieldRowCenter]}
-                onPress={() => navigation.navigate('Authority')}
-                activeOpacity={0.7}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[Typography.body1, { color: colors.text }]}>Quản lý cộng đồng</Text>
-                  <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                    Đăng thông báo, điểm sơ tán, cứu hộ
-                  </Text>
-                </View>
-                <Ionicons name="megaphone-outline" size={18} color={colors.primary} />
-              </TouchableOpacity>
+              {user?.role === 'admin' && (
+                <TouchableOpacity
+                  style={[styles.fieldRow, styles.fieldRowCenter]}
+                  onPress={() => navigation.navigate('Authority')}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[Typography.body1, { color: colors.text }]}>Quản lý cộng đồng</Text>
+                    <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                      Đăng thông báo, điểm sơ tán, cứu hộ
+                    </Text>
+                  </View>
+                  <Ionicons name="megaphone-outline" size={18} color={colors.primary} />
+                </TouchableOpacity>
+              )}
+              {user?.role === 'responder' && (
+                <TouchableOpacity
+                  style={[styles.fieldRow, styles.fieldRowCenter]}
+                  onPress={() => navigation.navigate('Responder')}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[Typography.body1, { color: colors.text }]}>Điều phối cứu hộ</Text>
+                    <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                      Yêu cầu cứu hộ, điểm sơ tán
+                    </Text>
+                  </View>
+                  <Ionicons name="medkit-outline" size={18} color="#F39C12" />
+                </TouchableOpacity>
+              )}
             </View>
           </>
         )}

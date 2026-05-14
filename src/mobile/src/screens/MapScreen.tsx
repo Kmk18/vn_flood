@@ -6,6 +6,7 @@ import {
 import MapView, { Marker, Polygon, Polyline, PROVIDER_DEFAULT, MapType } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
@@ -60,7 +61,10 @@ interface RouteInfo {
 export const MapScreen = () => {
   const navigation = useNavigation();
   const { isDarkMode, colors: themeColors } = useTheme();
-  const { basins, selectedBasin, filterMinRisk, isLoading, setSelectedBasin, setFilterMinRisk } = useFloodStore();
+  const { basins, selectedBasin, filterMinRisk, isLoading, fetchData, setSelectedBasin, setFilterMinRisk } = useFloodStore();
+
+  // Re-fetch when the map tab is focused (respects 5-min cooldown in the store)
+  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
   const { shareLocation } = useLocationStore();
 
   const mapRef = useRef<MapView>(null);
@@ -79,6 +83,7 @@ export const MapScreen = () => {
   const [selectedRescue, setSelectedRescue] = useState<RescuePoint | null>(null);
   const [route, setRoute]                   = useState<RouteInfo | null>(null);
   const [isRouting, setIsRouting]           = useState(false);
+
   const activeRescueRef  = useRef<RescuePoint | null>(null);
   const locationSubRef   = useRef<Location.LocationSubscription | null>(null);
   const fetchRouteRef    = useRef<((dest: RescuePoint, showLoader?: boolean) => Promise<void>) | null>(null);
@@ -279,25 +284,28 @@ export const MapScreen = () => {
   const polygonChildren = useMemo(() =>
     Object.entries(basinPolygons).map(([id, poly]) => {
       const basin = basinMap.get(id);
-      if (basin && RISK_ORDER.indexOf(basin.riskLevel) < minOrder) return null;
-      const fill   = basin ? RISK_COLORS_ALPHA[basin.riskLevel] : 'rgba(100,100,100,0.08)';
-      const stroke = basin ? RISK_COLORS[basin.riskLevel]       : 'rgba(150,150,150,0.3)';
+      if (!basin) return null;
+      if (RISK_ORDER.indexOf(basin.riskLevel) < minOrder) return null;
+
+      const fill   = RISK_COLORS_ALPHA[basin.riskLevel];
+      const stroke = RISK_COLORS[basin.riskLevel];
+
       return poly.parts.map((coords, i) => (
         <Polygon
           key={`${id}-${i}`}
           coordinates={coords}
           fillColor={fill}
           strokeColor={stroke}
-          strokeWidth={basin ? 1.5 : 0.5}
-          tappable={!!basin}
-          onPress={basin ? () => {
+          strokeWidth={1.5}
+          tappable
+          onPress={() => {
             setShowSuggestions(false);
             setShowSettings(false);
             setSelectedRescue(null);
             setRoute(null);
             activeRescueRef.current = null;
             setSelectedBasin(basin);
-          } : undefined}
+          }}
         />
       ));
     }),
@@ -368,6 +376,7 @@ export const MapScreen = () => {
         {/* Rescue point markers */}
         {rescueMarkers}
       </MapView>
+
 
       {isLoading && (
         <View style={styles.loadingOverlay} pointerEvents="none">

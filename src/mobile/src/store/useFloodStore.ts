@@ -38,13 +38,16 @@ function toBasinForecast(p: TodayPrediction, forecast7d: BasinForecast['forecast
   };
 }
 
+const REFETCH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
 interface FloodState {
   basins: BasinForecast[];
   alerts: BasinForecast[];
   selectedBasin: BasinForecast | null;
   filterMinRisk: RiskLevel;
   isLoading: boolean;
-  fetchData: () => Promise<void>;
+  lastFetched: number;
+  fetchData: (force?: boolean) => Promise<void>;
   fetchForecast: (hybasId: number) => Promise<void>;
   setSelectedBasin: (basin: BasinForecast | null) => void;
   setFilterMinRisk: (risk: RiskLevel) => void;
@@ -56,8 +59,10 @@ export const useFloodStore = create<FloodState>((set, get) => ({
   selectedBasin: null,
   filterMinRisk: 'low',
   isLoading: false,
+  lastFetched: 0,
 
-  fetchData: async () => {
+  fetchData: async (force = false) => {
+    if (!force && Date.now() - get().lastFetched < REFETCH_INTERVAL_MS) return;
     set({ isLoading: true });
     try {
       const [todayPreds, alertPreds] = await Promise.all([
@@ -83,9 +88,8 @@ export const useFloodStore = create<FloodState>((set, get) => ({
         .filter((p) => { if (seen.has(p.hybasId)) return false; seen.add(p.hybasId); return true; })
         .map((p) => toBasinForecast(p, forecastMap.get(p.hybasId) ?? []));
 
-      set({ basins, alerts, isLoading: false });
+      set({ basins, alerts, isLoading: false, lastFetched: Date.now() });
     } catch {
-      // Keep mock data on error so the app remains usable offline
       set({ isLoading: false });
     }
   },

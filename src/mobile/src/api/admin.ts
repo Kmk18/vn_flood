@@ -28,4 +28,5 @@ export const adminApi = {
 
   deleteUser: (id: number) =>
     api.delete<{ success: boolean }>(`/api/admin/users/${id}`).then((r) => r.data),
+
 };
