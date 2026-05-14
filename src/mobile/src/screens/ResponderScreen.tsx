@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, Alert, ActivityIndicator, RefreshControl,
   Switch, Linking, Platform,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,29 +11,17 @@ import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { rescueApi, RescuePoint, RescueRequest } from '../api/rescue';
 import { useResponderStore } from '../store/useResponderStore';
+import { useAuthStore } from '../store/useAuthStore';
 
-type ResponderTab = 'requests' | 'points';
+type ResponderTab = 'open' | 'assigned' | 'resolved' | 'points';
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLOR: Record<string, string> = {
   open: '#E74C3C',
   assigned: '#F39C12',
   resolved: '#2ECC71',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  open: 'MỞ',
-  assigned: 'ĐANG XỬ LÝ',
-  resolved: 'HOÀN THÀNH',
-};
-
-const VIETNAM_REGION = {
-  latitude: 16.5,
-  longitude: 106.5,
-  latitudeDelta: 12,
-  longitudeDelta: 6,
-};
-
-function openNavigation(lat: number, lon: number) {
+function openExternalNav(lat: number, lon: number) {
   const url = Platform.OS === 'ios'
     ? `maps://app?daddr=${lat},${lon}`
     : `geo:${lat},${lon}?q=${lat},${lon}`;
@@ -43,21 +30,117 @@ function openNavigation(lat: number, lon: number) {
   );
 }
 
+// ── Request card shared between open and assigned tabs ─────────────────────
+
+interface RequestCardProps {
+  req: RescueRequest;
+  currentUserId: number | undefined;
+  onAccept: (req: RescueRequest) => void;
+  onResolve: (id: number) => void;
+  updatingId: number | null;
+  colors: ReturnType<typeof import('../theme/useTheme').useTheme>['colors'];
+}
+
+const RequestCard: React.FC<RequestCardProps> = ({ req, currentUserId, onAccept, onResolve, updatingId, colors }) => {
+  const assignedUsers = req.assignedUsers ?? [];
+  const isAssignedToMe = assignedUsers.some((u) => u.id === currentUserId);
+  const alreadyAccepted = isAssignedToMe;
+  const busy = updatingId === req.id;
+
+  return (
+    <View style={[styles.card, { backgroundColor: colors.card }]}>
+      <View style={[styles.cardAccent, { backgroundColor: STATUS_COLOR[req.status] ?? colors.border }]} />
+      <View style={styles.cardInner}>
+        {/* Header row */}
+        <View style={styles.cardHeader}>
+          <Text style={[Typography.body2, { color: colors.text, fontWeight: '700' }]}>
+            YÊU CẦU #{req.id}
+          </Text>
+          <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+            {req.peopleCount} người
+          </Text>
+        </View>
+
+        <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+          {req.lat.toFixed(5)}°N, {req.lon.toFixed(5)}°E
+        </Text>
+        {req.notes ? (
+          <Text style={[Typography.caption, { color: colors.text, marginTop: Spacing.xs }]} numberOfLines={2}>
+            {req.notes}
+          </Text>
+        ) : null}
+        <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+          {new Date(req.createdAt).toLocaleString('vi-VN')}
+        </Text>
+
+        {/* Assigned users list */}
+        {assignedUsers.length > 0 && (
+          <View style={[styles.assigneeList, { backgroundColor: colors.background }]}>
+            <Text style={[Typography.label, { color: colors.textSecondary, marginBottom: 2 }]}>NGƯỜI TIẾP NHẬN</Text>
+            {assignedUsers.map((u) => (
+              <View key={u.id} style={styles.assigneeRow}>
+                <Ionicons name="person-circle-outline" size={14} color={colors.primary} />
+                <Text style={[Typography.caption, { color: colors.text, marginLeft: 4 }]}>{u.name}</Text>
+                {u.id === currentUserId && (
+                  <Text style={[Typography.label, { color: colors.primary, marginLeft: 4 }]}>(bạn)</Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Actions */}
+        <View style={styles.actionRow}>
+          {!alreadyAccepted && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#F39C1222' }]}
+              onPress={() => onAccept(req)}
+              disabled={busy}
+              activeOpacity={0.8}
+            >
+              {busy
+                ? <ActivityIndicator size="small" color="#F39C12" />
+                : <Text style={[Typography.label, { color: '#F39C12' }]}>TIẾP NHẬN</Text>
+              }
+            </TouchableOpacity>
+          )}
+
+          {isAssignedToMe && req.status !== 'resolved' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#2ECC7122' }]}
+              onPress={() => onResolve(req.id)}
+              disabled={busy}
+              activeOpacity={0.8}
+            >
+              {busy
+                ? <ActivityIndicator size="small" color="#2ECC71" />
+                : <Text style={[Typography.label, { color: '#2ECC71' }]}>HOÀN THÀNH</Text>
+              }
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// ── Main screen ───────────────────────────────────────────────────────────────
+
 export const ResponderScreen = () => {
   const { colors } = useTheme();
   const navigation = useNavigation<NavigationProp<any>>();
-  const mapRef = useRef<MapView>(null);
-
-  const [activeTab, setActiveTab] = useState<ResponderTab>('requests');
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Requests
-  const [requests, setRequests] = useState<RescueRequest[]>([]);
-  const [loadingRequests, setLoadingRequests] = useState(false);
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
   const setPendingNav = useResponderStore((s) => s.setPendingNav);
+  const currentUser = useAuthStore((s) => s.user);
 
-  // Points
+  const [activeTab, setActiveTab] = useState<ResponderTab>('open');
+  const [refreshing, setRefreshing] = useState(false);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+  const [openReqs, setOpenReqs] = useState<RescueRequest[]>([]);
+  const [assignedReqs, setAssignedReqs] = useState<RescueRequest[]>([]);
+  const [resolvedReqs, setResolvedReqs] = useState<RescueRequest[]>([]);
+
+  // Points state
   const [points, setPoints] = useState<RescuePoint[]>([]);
   const [showAddPoint, setShowAddPoint] = useState(false);
   const [newName, setNewName] = useState('');
@@ -66,39 +149,35 @@ export const ResponderScreen = () => {
   const [newProvince, setNewProvince] = useState('');
   const [addingPoint, setAddingPoint] = useState(false);
 
-  const loadRequests = useCallback(async () => {
-    setLoadingRequests(true);
+  const loadTab = useCallback(async (tab: ResponderTab) => {
+    if (tab === 'points') {
+      try { setPoints(await rescueApi.getPoints()); } catch { /* keep */ }
+      return;
+    }
     try {
-      const data = await rescueApi.getAllRequests();
-      setRequests(data);
-    } catch { /* keep previous */ }
-    setLoadingRequests(false);
+      const data = await rescueApi.getByStatus(tab as 'open' | 'assigned' | 'resolved');
+      if (tab === 'open') setOpenReqs(data);
+      else if (tab === 'assigned') setAssignedReqs(data);
+      else setResolvedReqs(data);
+    } catch { /* keep */ }
   }, []);
 
-  const loadPoints = useCallback(async () => {
-    try {
-      const data = await rescueApi.getPoints();
-      setPoints(data);
-    } catch { /* keep previous */ }
-  }, []);
+  useEffect(() => { loadTab('open'); loadTab('assigned'); loadTab('points'); }, [loadTab]);
 
-  useEffect(() => {
-    loadRequests();
-    loadPoints();
-  }, []);
+  useEffect(() => { loadTab(activeTab); }, [activeTab, loadTab]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([loadRequests(), loadPoints()]);
+    await loadTab(activeTab);
     setRefreshing(false);
   };
 
   const handleAccept = async (req: RescueRequest) => {
     setUpdatingId(req.id);
     try {
-      await rescueApi.updateStatus(req.id, 'assigned');
+      await rescueApi.assignSelf(req.id);
       setPendingNav({ id: req.id, lat: req.lat, lon: req.lon, label: `Yêu cầu #${req.id}` });
-      navigation.goBack();
+      navigation.navigate('MainTabs' as never, { screen: 'Bản đồ' } as never);
     } catch {
       Alert.alert('Lỗi', 'Không thể tiếp nhận. Thử lại.');
     }
@@ -108,19 +187,18 @@ export const ResponderScreen = () => {
   const handleResolve = async (id: number) => {
     setUpdatingId(id);
     try {
-      const updated = await rescueApi.updateStatus(id, 'resolved');
-      setRequests((prev) => prev.map((r) => r.id === id ? updated : r));
-    } catch {
-      Alert.alert('Lỗi', 'Không thể cập nhật. Thử lại.');
+      await rescueApi.resolve(id);
+      setAssignedReqs((prev) => prev.filter((r) => r.id !== id));
+      await loadTab('resolved');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? 'Không thể hoàn thành. Thử lại.';
+      Alert.alert('Lỗi', msg);
     }
     setUpdatingId(null);
   };
 
   const handleAddPoint = async () => {
-    if (!newName.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên điểm sơ tán.');
-      return;
-    }
+    if (!newName.trim()) { Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên điểm sơ tán.'); return; }
     setAddingPoint(true);
     try {
       const point = await rescueApi.createPoint({
@@ -132,14 +210,9 @@ export const ResponderScreen = () => {
         lon: 0,
       });
       setPoints((prev) => [point, ...prev]);
-      setNewName('');
-      setNewAddress('');
-      setNewCapacity('');
-      setNewProvince('');
+      setNewName(''); setNewAddress(''); setNewCapacity(''); setNewProvince('');
       setShowAddPoint(false);
-    } catch {
-      Alert.alert('Lỗi', 'Không thể thêm điểm. Thử lại.');
-    }
+    } catch { Alert.alert('Lỗi', 'Không thể thêm điểm. Thử lại.'); }
     setAddingPoint(false);
   };
 
@@ -147,17 +220,35 @@ export const ResponderScreen = () => {
     try {
       const updated = await rescueApi.updatePoint(point.id, { isActive: !point.isActive });
       setPoints((prev) => prev.map((p) => p.id === point.id ? updated : p));
-    } catch {
-      Alert.alert('Lỗi', 'Không thể cập nhật. Thử lại.');
-    }
+    } catch { Alert.alert('Lỗi', 'Không thể cập nhật. Thử lại.'); }
   };
 
-  const openRequests = requests.filter((r) => r.status !== 'resolved');
-
-  const tabs: { key: ResponderTab; label: string }[] = [
-    { key: 'requests', label: 'Cứu hộ' },
-    { key: 'points', label: 'Điểm sơ tán' },
+  const tabs: { key: ResponderTab; label: string; count?: number }[] = [
+    { key: 'open',     label: 'Chờ xử lý', count: openReqs.length },
+    { key: 'assigned', label: 'Đang xử lý', count: assignedReqs.length },
+    { key: 'resolved', label: 'Hoàn thành' },
+    { key: 'points',   label: 'Điểm sơ tán' },
   ];
+
+  const renderRequests = (list: RescueRequest[]) => (
+    list.length === 0
+      ? <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
+          Không có yêu cầu nào.
+        </Text>
+      : <View style={styles.listGap}>
+          {list.map((req) => (
+            <RequestCard
+              key={req.id}
+              req={req}
+              currentUserId={currentUser?.id}
+              onAccept={handleAccept}
+              onResolve={handleResolve}
+              updatingId={updatingId}
+              colors={colors}
+            />
+          ))}
+        </View>
+  );
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}>
@@ -173,7 +264,12 @@ export const ResponderScreen = () => {
       </View>
 
       {/* Tab bar */}
-      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[styles.tabBar, { borderBottomColor: colors.border }]}
+        contentContainerStyle={styles.tabBarContent}
+      >
         {tabs.map((tab) => {
           const active = activeTab === tab.key;
           return (
@@ -188,126 +284,79 @@ export const ResponderScreen = () => {
               }]}>
                 {tab.label}
               </Text>
-              {tab.key === 'requests' && openRequests.length > 0 && (
-                <View style={[styles.badge, { backgroundColor: colors.danger }]}>
-                  <Text style={styles.badgeText}>{openRequests.length}</Text>
+              {tab.count !== undefined && tab.count > 0 && (
+                <View style={[styles.badge, { backgroundColor: tab.key === 'open' ? colors.danger : '#F39C12' }]}>
+                  <Text style={styles.badgeText}>{tab.count}</Text>
                 </View>
               )}
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
-      {/* ── Requests tab ── */}
-      {activeTab === 'requests' && (
-        <View style={{ flex: 1 }}>
-          {/* Map showing all open request pins */}
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            provider={PROVIDER_DEFAULT}
-            initialRegion={VIETNAM_REGION}
-            showsUserLocation
-          >
-            {openRequests.map((req) => (
-              <Marker
-                key={req.id}
-                coordinate={{ latitude: req.lat, longitude: req.lon }}
-                pinColor={STATUS_COLORS[req.status] ?? colors.danger}
-                title={`Yêu cầu #${req.id}`}
-                description={`${req.peopleCount} người · ${STATUS_LABELS[req.status] ?? req.status}`}
-              />
-            ))}
-          </MapView>
+      {/* ── Open requests ── */}
+      {activeTab === 'open' && (
+        <ScrollView
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        >
+          {renderRequests(openReqs)}
+        </ScrollView>
+      )}
 
-          <ScrollView
-            contentContainerStyle={styles.body}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-          >
-            {loadingRequests ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.xl }} />
-            ) : requests.length === 0 ? (
-              <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
-                Không có yêu cầu cứu hộ nào.
+      {/* ── Assigned requests ── */}
+      {activeTab === 'assigned' && (
+        <ScrollView
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        >
+          {renderRequests(assignedReqs)}
+        </ScrollView>
+      )}
+
+      {/* ── Resolved requests (minimal) ── */}
+      {activeTab === 'resolved' && (
+        <ScrollView
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        >
+          {resolvedReqs.length === 0
+            ? <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
+                Chưa có yêu cầu nào hoàn thành.
               </Text>
-            ) : (
-              <View style={styles.listGap}>
-                {requests.map((req) => (
-                  <View key={req.id} style={[styles.requestCard, { backgroundColor: colors.card }]}>
-                    <View style={[styles.accent, { backgroundColor: STATUS_COLORS[req.status] ?? colors.border }]} />
-                    <View style={styles.requestInner}>
-                      <View style={styles.requestHeader}>
-                        <Text style={[Typography.body2, { color: colors.text, fontWeight: '700' }]}>
+            : <View style={styles.listGap}>
+                {resolvedReqs.map((req) => (
+                  <View key={req.id} style={[styles.resolvedCard, { backgroundColor: colors.card }]}>
+                    <View style={[styles.cardAccent, { backgroundColor: STATUS_COLOR.resolved }]} />
+                    <View style={styles.cardInner}>
+                      <View style={styles.cardHeader}>
+                        <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]}>
                           YÊU CẦU #{req.id}
                         </Text>
-                        <View style={[styles.statusPill, { backgroundColor: (STATUS_COLORS[req.status] ?? colors.border) + '22' }]}>
-                          <Text style={[Typography.label, { color: STATUS_COLORS[req.status] ?? colors.textSecondary }]}>
-                            {STATUS_LABELS[req.status] ?? req.status.toUpperCase()}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: Spacing.xs }]}>
-                        {req.lat.toFixed(5)}°N, {req.lon.toFixed(5)}°E · {req.peopleCount} người
-                      </Text>
-                      {req.notes ? (
-                        <Text style={[Typography.caption, { color: colors.text, marginTop: Spacing.xs }]} numberOfLines={2}>
-                          {req.notes}
+                        <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+                          {req.peopleCount} người
                         </Text>
-                      ) : null}
-                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: Spacing.xs }]}>
-                        {new Date(req.createdAt).toLocaleString('vi-VN')}
-                      </Text>
-
-                      <View style={styles.actionRow}>
-                        <TouchableOpacity
-                          style={[styles.dirBtn, { borderColor: colors.primary }]}
-                          onPress={() => openNavigation(req.lat, req.lon)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="navigate-outline" size={14} color={colors.primary} />
-                          <Text style={[Typography.label, { color: colors.primary, marginLeft: 4 }]}>CHỈ ĐƯỜNG</Text>
-                        </TouchableOpacity>
-
-                        {req.status === 'open' && (
-                          <TouchableOpacity
-                            style={[styles.actionBtn, { backgroundColor: '#F39C1222' }]}
-                            onPress={() => handleAccept(req)}
-                            disabled={updatingId === req.id}
-                            activeOpacity={0.8}
-                          >
-                            {updatingId === req.id
-                              ? <ActivityIndicator size="small" color="#F39C12" />
-                              : <Text style={[Typography.label, { color: '#F39C12' }]}>TIẾP NHẬN</Text>
-                            }
-                          </TouchableOpacity>
-                        )}
-
-                        {req.status !== 'resolved' && (
-                          <TouchableOpacity
-                            style={[styles.actionBtn, { backgroundColor: '#2ECC7122' }]}
-                            onPress={() => handleResolve(req.id)}
-                            disabled={updatingId === req.id}
-                            activeOpacity={0.8}
-                          >
-                            {updatingId === req.id && req.status === 'assigned'
-                              ? <ActivityIndicator size="small" color="#2ECC71" />
-                              : <Text style={[Typography.label, { color: '#2ECC71' }]}>HOÀN THÀNH</Text>
-                            }
-                          </TouchableOpacity>
-                        )}
                       </View>
+                      {(req.assignedUsers ?? []).length > 0 && (
+                        <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                          Cứu hộ: {(req.assignedUsers ?? []).map((u) => u.name).join(', ')}
+                        </Text>
+                      )}
+                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                        {new Date(req.updatedAt).toLocaleString('vi-VN')}
+                      </Text>
                     </View>
                   </View>
                 ))}
               </View>
-            )}
-          </ScrollView>
-        </View>
+          }
+        </ScrollView>
       )}
 
-      {/* ── Points tab ── */}
+      {/* ── Evacuation points ── */}
       {activeTab === 'points' && (
         <ScrollView
           contentContainerStyle={styles.body}
@@ -381,43 +430,40 @@ export const ResponderScreen = () => {
             </View>
           )}
 
-          {points.length === 0 ? (
-            <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
-              Chưa có điểm sơ tán nào.
-            </Text>
-          ) : (
-            <View style={styles.listGap}>
-              {points.map((point) => (
-                <View key={point.id} style={[styles.pointCard, { backgroundColor: colors.card }]}>
-                  <View style={[styles.pointDot, { backgroundColor: point.isActive ? '#2ECC71' : colors.border }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]}>
-                      {point.name}
-                    </Text>
-                    <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                      {point.address || point.province || 'Chưa có địa chỉ'}
-                      {point.capacity ? ` · ${point.capacity} người` : ''}
-                    </Text>
+          {points.length === 0
+            ? <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
+                Chưa có điểm sơ tán nào.
+              </Text>
+            : <View style={styles.listGap}>
+                {points.map((point) => (
+                  <View key={point.id} style={[styles.pointCard, { backgroundColor: colors.card }]}>
+                    <View style={[styles.pointDot, { backgroundColor: point.isActive ? '#2ECC71' : colors.border }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]}>{point.name}</Text>
+                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                        {point.address || point.province || 'Chưa có địa chỉ'}
+                        {point.capacity ? ` · ${point.capacity} người` : ''}
+                      </Text>
+                    </View>
+                    {point.lat !== 0 && (
+                      <TouchableOpacity
+                        style={styles.pointNavBtn}
+                        onPress={() => openExternalNav(point.lat, point.lon)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="navigate-outline" size={18} color={colors.primary} />
+                      </TouchableOpacity>
+                    )}
+                    <Switch
+                      value={point.isActive}
+                      onValueChange={() => handleTogglePoint(point)}
+                      trackColor={{ false: colors.border, true: '#2ECC71' }}
+                      thumbColor="#fff"
+                    />
                   </View>
-                  {point.lat !== 0 && (
-                    <TouchableOpacity
-                      style={styles.pointNavBtn}
-                      onPress={() => openNavigation(point.lat, point.lon)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name="navigate-outline" size={18} color={colors.primary} />
-                    </TouchableOpacity>
-                  )}
-                  <Switch
-                    value={point.isActive}
-                    onValueChange={() => handleTogglePoint(point)}
-                    trackColor={{ false: colors.border, true: '#2ECC71' }}
-                    thumbColor="#fff"
-                  />
-                </View>
-              ))}
-            </View>
-          )}
+                ))}
+              </View>
+          }
         </ScrollView>
       )}
     </SafeAreaView>
@@ -436,16 +482,13 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: Spacing.xs },
   roleBadge: { paddingHorizontal: Spacing.s, paddingVertical: 3, borderRadius: 6 },
-  tabBar: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    paddingHorizontal: Spacing.m,
-  },
+  tabBar: { borderBottomWidth: 1, flexGrow: 0 },
+  tabBarContent: { paddingHorizontal: Spacing.m },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Spacing.m,
-    paddingRight: Spacing.l,
+    marginRight: Spacing.l,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
     gap: Spacing.xs,
@@ -459,12 +502,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  map: { height: 220, width: '100%' },
   body: { padding: Spacing.m, paddingBottom: Spacing.xxl, gap: Spacing.s },
   listGap: { gap: Spacing.s },
-  requestCard: {
-    borderRadius: 12,
+  card: {
     flexDirection: 'row',
+    borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -472,24 +514,28 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  accent: { width: 4 },
-  requestInner: { flex: 1, padding: Spacing.m },
-  requestHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statusPill: { paddingHorizontal: Spacing.s, paddingVertical: 3, borderRadius: 6 },
-  actionRow: { flexDirection: 'row', gap: Spacing.s, marginTop: Spacing.m, flexWrap: 'wrap' },
-  dirBtn: {
+  resolvedCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.m,
-    paddingVertical: Spacing.s,
-    borderRadius: 8,
-    borderWidth: 1.5,
+    borderRadius: 12,
+    overflow: 'hidden',
+    opacity: 0.75,
   },
+  cardAccent: { width: 4 },
+  cardInner: { flex: 1, padding: Spacing.m },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  assigneeList: {
+    marginTop: Spacing.s,
+    padding: Spacing.s,
+    borderRadius: 8,
+    gap: 4,
+  },
+  assigneeRow: { flexDirection: 'row', alignItems: 'center' },
+  actionRow: { flexDirection: 'row', gap: Spacing.s, marginTop: Spacing.m },
   actionBtn: {
     paddingHorizontal: Spacing.m,
     paddingVertical: Spacing.s,
     borderRadius: 8,
-    minWidth: 80,
+    minWidth: 100,
     alignItems: 'center',
   },
   addBtn: {
@@ -509,19 +555,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  cardInput: {
-    fontSize: 14,
-    borderBottomWidth: 1,
-    paddingVertical: Spacing.s,
-    marginTop: Spacing.xs,
-  },
+  cardInput: { fontSize: 14, borderBottomWidth: 1, paddingVertical: Spacing.s, marginTop: Spacing.xs },
   twoCol: { flexDirection: 'row' },
-  submitBtn: {
-    height: 50,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  submitBtn: { height: 50, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   pointCard: {
     flexDirection: 'row',
     alignItems: 'center',

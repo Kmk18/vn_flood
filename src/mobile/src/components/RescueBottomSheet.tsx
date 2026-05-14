@@ -27,6 +27,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
   const [mounted, setMounted] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [description, setDescription] = useState('');
+  const [peopleCount, setPeopleCount] = useState(1);
   const [shelters, setShelters] = useState<RescuePoint[]>([]);
 
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
@@ -62,6 +63,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
         setMounted(false);
         setSubmitted(false);
         setDescription('');
+        setPeopleCount(1);
         holdProgress.setValue(0);
       });
     }
@@ -117,7 +119,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
       if (finished) {
         setSubmitted(true);
         const { lat, lon } = locationRef.current!;
-        rescueApi.createRequest({ lat, lon, peopleCount: 1, notes: description || undefined })
+        rescueApi.createRequest({ lat, lon, peopleCount, notes: description || undefined })
           .catch(() => {});
       }
     });
@@ -203,6 +205,28 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
             numberOfLines={3}
             textAlignVertical="top"
           />
+
+          {/* People count stepper */}
+          <Text style={[Typography.label, { color: themeColors.textSecondary, marginBottom: Spacing.s }]}>
+            SỐ NGƯỜI CẦN CỨU HỘ
+          </Text>
+          <View style={styles.stepperRow}>
+            <TouchableOpacity
+              onPress={() => setPeopleCount((n) => Math.max(1, n - 1))}
+              style={[styles.stepperBtn, { backgroundColor: themeColors.secondary }]}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.stepperBtnText, { color: themeColors.text }]}>−</Text>
+            </TouchableOpacity>
+            <Text style={[styles.stepperValue, { color: themeColors.text }]}>{peopleCount}</Text>
+            <TouchableOpacity
+              onPress={() => setPeopleCount((n) => Math.min(100, n + 1))}
+              style={[styles.stepperBtn, { backgroundColor: themeColors.secondary }]}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.stepperBtnText, { color: themeColors.text }]}>+</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Image upload */}
           <TouchableOpacity
@@ -397,5 +421,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.m,
+    gap: Spacing.m,
+  },
+  stepperBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperBtnText: {
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 24,
+  },
+  stepperValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    minWidth: 32,
+    textAlign: 'center',
   },
 });
