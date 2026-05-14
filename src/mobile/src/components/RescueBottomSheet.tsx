@@ -44,6 +44,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
   const [peopleText, setPeopleText] = useState('1');
   const [userLoc, setUserLoc] = useState<{ lat: number; lon: number } | null>(null);
   const [shelters, setShelters] = useState<RescuePoint[]>([]);
+  const [roadDistances, setRoadDistances] = useState<Record<number, { distKm: number; durationMin: number }>>({});
 
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
   const pulseAnims = useRef([
@@ -85,6 +86,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
         setPeopleCount(1);
         setPeopleText('1');
         setUserLoc(null);
+        setRoadDistances({});
         holdProgress.setValue(0);
       });
     }
@@ -117,13 +119,62 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
     return () => loops.forEach((l) => l.stop());
   }, [mounted]);
 
+  // Fetch road distances via OSRM table API (one request for all shelters)
+  useEffect(() => {
+    if (!userLoc || shelters.length === 0) return;
+
+    // Pre-sort by haversine so we send at most 20 candidates to OSRM
+    const candidates = [...shelters]
+      .map((s) => ({ ...s, _h: haversineKm(userLoc.lat, userLoc.lon, s.lat, s.lon) }))
+      .sort((a, b) => a._h - b._h)
+      .slice(0, 20);
+
+    const coords = [
+      `${userLoc.lon},${userLoc.lat}`,
+      ...candidates.map((s) => `${s.lon},${s.lat}`),
+    ].join(';');
+    const dests = candidates.map((_, i) => i + 1).join(';');
+    const url =
+      `https://router.project-osrm.org/table/v1/driving/${coords}` +
+      `?sources=0&destinations=${dests}&annotations=distance,duration`;
+
+    const ctrl = new AbortController();
+    fetch(url, { signal: ctrl.signal })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.code !== 'Ok') return;
+        const dists: (number | null)[] = data.distances[0];
+        const durs: (number | null)[] = data.durations[0];
+        const map: Record<number, { distKm: number; durationMin: number }> = {};
+        candidates.forEach((s, i) => {
+          const d = dists[i];
+          const t = durs[i];
+          if (d != null && t != null) {
+            map[s.id] = { distKm: Math.round(d / 100) / 10, durationMin: Math.round(t / 60) };
+          }
+        });
+        setRoadDistances(map);
+      })
+      .catch(() => {});
+
+    return () => ctrl.abort();
+  }, [userLoc, shelters]);
+
   const sortedShelters = useMemo(() => {
-    if (!userLoc || shelters.length === 0) return shelters.slice(0, 10);
     return [...shelters]
-      .map((s) => ({ ...s, distKm: haversineKm(userLoc.lat, userLoc.lon, s.lat, s.lon) }))
+      .map((s) => {
+        const road = roadDistances[s.id];
+        const hDist = userLoc ? haversineKm(userLoc.lat, userLoc.lon, s.lat, s.lon) : Infinity;
+        return {
+          ...s,
+          distKm: road?.distKm ?? hDist,
+          durationMin: road?.durationMin ?? null,
+          isRoad: !!road,
+        };
+      })
       .sort((a, b) => a.distKm - b.distKm)
       .slice(0, 10);
-  }, [shelters, userLoc]);
+  }, [shelters, userLoc, roadDistances]);
 
   const onPressIn = () => {
     if (submitted) return;
@@ -315,7 +366,11 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
                     {[
                       shelter.address || shelter.province,
                       shelter.capacity ? `${shelter.capacity} người` : null,
-                      'distKm' in shelter ? fmtDist((shelter as any).distKm) : null,
+                      shelter.distKm !== Infinity
+                        ? shelter.isRoad
+                          ? `${fmtDist(shelter.distKm)}${shelter.durationMin ? ` · ${shelter.durationMin} phút` : ''}`
+                          : `~${fmtDist(shelter.distKm)}`
+                        : null,
                     ].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
