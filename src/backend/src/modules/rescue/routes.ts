@@ -1,8 +1,8 @@
 import type { Express, Request, Response, NextFunction } from 'express';
 import type { Redis } from 'ioredis';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, rescuePoints, rescueRequests } from '../../db';
+import { db, rescuePoints, rescueRequests, users } from '../../db';
 import { requireAuth } from '../../middleware/requireAuth';
 
 const requireAuthority = (req: Request, res: Response, next: NextFunction) => {
@@ -13,7 +13,7 @@ const requireAuthority = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
-const CACHE_TTL = 3600; // rescue points are stable
+const CACHE_TTL = 3600;
 
 async function cached<T>(redis: Redis, key: string, ttl: number, fn: () => Promise<T>): Promise<T> {
   try {
@@ -50,10 +50,6 @@ const createRequestSchema = z.object({
   notes: z.string().max(500).optional(),
 });
 
-const updateStatusSchema = z.object({
-  status: z.enum(['open', 'assigned', 'resolved']),
-});
-
 const log = (event: string, detail: Record<string, unknown>) =>
   console.log(`[rescue] ${event}`, { ...detail, ts: new Date().toISOString() });
 
@@ -85,7 +81,7 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
     try {
       const [request] = await db
         .insert(rescueRequests)
-        .values({ userId, lat, lon, peopleCount, notes, status: 'open' })
+        .values({ userId, lat, lon, peopleCount, notes, status: 'open', assignedUsers: [] })
         .returning();
 
       log('request:created', { id: request.id, userId, lat, lon, peopleCount });
@@ -112,17 +108,24 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
     }
   });
 
-  // GET /api/rescue/requests — all open requests (admin/responder only)
+  // GET /api/rescue/requests — list requests (admin/responder only)
+  // ?status=open|assigned|resolved  →  filter by that status
+  // no param                        →  open + assigned (for map overlay)
   app.get('/api/rescue/requests', requireAuth, async (req: Request, res: Response) => {
     if (req.user!.role === 'user') {
       res.status(403).json({ error: 'Forbidden' });
       return;
     }
+    const status = req.query.status as string | undefined;
     try {
       const data = await db
         .select()
         .from(rescueRequests)
-        .where(eq(rescueRequests.status, 'open'))
+        .where(
+          status
+            ? eq(rescueRequests.status, status)
+            : inArray(rescueRequests.status, ['open', 'assigned'])
+        )
         .orderBy(sql`${rescueRequests.createdAt} desc`);
       res.json(data);
     } catch (err) {
@@ -171,41 +174,86 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
     }
   });
 
-  // PATCH /api/rescue/requests/:id/status — update status (admin/responder only)
-  app.patch('/api/rescue/requests/:id/status', requireAuth, async (req: Request, res: Response) => {
-    if (req.user!.role === 'user') {
-      res.status(403).json({ error: 'Forbidden' });
-      return;
-    }
-
+  // PATCH /api/rescue/requests/:id/assign — add self to assignedUsers (responder/admin)
+  app.patch('/api/rescue/requests/:id/assign', requireAuth, requireAuthority, async (req: Request, res: Response) => {
     const id = parseInt(req.params.id, 10);
-    if (isNaN(id)) {
-      res.status(400).json({ error: 'Invalid id' });
-      return;
-    }
+    if (isNaN(id)) { res.status(400).json({ error: 'Invalid id' }); return; }
 
-    const result = updateStatusSchema.safeParse(req.body);
-    if (!result.success) {
-      res.status(400).json({ error: result.error.issues });
-      return;
-    }
+    const callerId = req.user!.sub;
 
     try {
-      const [updated] = await db
-        .update(rescueRequests)
-        .set({ status: result.data.status, updatedAt: new Date() })
-        .where(eq(rescueRequests.id, id))
-        .returning();
+      const [current] = await db
+        .select()
+        .from(rescueRequests)
+        .where(eq(rescueRequests.id, id));
 
-      if (!updated) {
-        res.status(404).json({ error: 'Request not found' });
+      if (!current) { res.status(404).json({ error: 'Request not found' }); return; }
+      if (current.status === 'resolved') {
+        res.status(400).json({ error: 'Request already resolved' });
         return;
       }
 
-      log('status:updated', { id, status: result.data.status, by: req.user!.sub });
+      const existing = (current.assignedUsers ?? []) as { id: number; name: string }[];
+      if (existing.some((u) => u.id === callerId)) {
+        res.json(current);
+        return;
+      }
+
+      const [callerRow] = await db
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, callerId));
+      const callerName = callerRow?.name || callerRow?.email || `#${callerId}`;
+
+      const [updated] = await db
+        .update(rescueRequests)
+        .set({
+          assignedUsers: [...existing, { id: callerId, name: callerName }],
+          status: 'assigned',
+          updatedAt: new Date(),
+        })
+        .where(eq(rescueRequests.id, id))
+        .returning();
+
+      log('request:assigned', { id, by: callerId });
       res.json(updated);
     } catch (err) {
-      console.error('[rescue] status:update:error', err);
+      console.error('[rescue] request:assign:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // PATCH /api/rescue/requests/:id/resolve — mark resolved (only an assignee)
+  app.patch('/api/rescue/requests/:id/resolve', requireAuth, requireAuthority, async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) { res.status(400).json({ error: 'Invalid id' }); return; }
+
+    const callerId = req.user!.sub;
+
+    try {
+      const [current] = await db
+        .select()
+        .from(rescueRequests)
+        .where(eq(rescueRequests.id, id));
+
+      if (!current) { res.status(404).json({ error: 'Request not found' }); return; }
+
+      const assignedUsers = (current.assignedUsers ?? []) as { id: number; name: string }[];
+      if (!assignedUsers.some((u) => u.id === callerId)) {
+        res.status(403).json({ error: 'Only an assigned rescuer can complete this request' });
+        return;
+      }
+
+      const [updated] = await db
+        .update(rescueRequests)
+        .set({ status: 'resolved', updatedAt: new Date() })
+        .where(eq(rescueRequests.id, id))
+        .returning();
+
+      log('request:resolved', { id, by: callerId });
+      res.json(updated);
+    } catch (err) {
+      console.error('[rescue] request:resolve:error', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

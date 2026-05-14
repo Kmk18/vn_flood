@@ -51,7 +51,7 @@ registerAuthRoutes(app, redis);
 registerUserRoutes(app);
 registerFloodRoutes(app, redis);
 registerForumRoutes(app, redis);
-registerIngestionRoutes(app);
+registerIngestionRoutes(app, redis);
 registerRescueRoutes(app, redis);
 registerAdminRoutes(app);
 registerAlertsRoutes(app);

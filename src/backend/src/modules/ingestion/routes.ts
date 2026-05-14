@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from 'express';
+import type { Redis } from 'ioredis';
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL ?? 'http://localhost:8080';
 const IS_CLOUD_RUN = ML_SERVICE_URL.includes('run.app');
@@ -19,7 +20,15 @@ async function mlFetch(path: string, init: RequestInit = {}) {
   });
 }
 
-export const registerIngestionRoutes = (app: Express) => {
+const PREDICTION_CACHE_KEYS = [
+  'flood:predictions:today:low',
+  'flood:predictions:today:medium',
+  'flood:predictions:today:high',
+  'flood:predictions:today:critical',
+  'flood:alerts',
+];
+
+export const registerIngestionRoutes = (app: Express, redis: Redis) => {
   app.post('/api/internal/ingest', async (req: Request, res: Response) => {
     const secret = process.env.INGEST_SECRET;
     if (secret && req.headers['x-ingest-secret'] !== secret) {
@@ -29,12 +38,12 @@ export const registerIngestionRoutes = (app: Express) => {
 
     const targetDate =
       (req.body?.date as string | undefined) ??
-      new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
+      new Date(Date.now()).toISOString().slice(0, 10);
 
     try {
       const upstream = await mlFetch(`/ingest/${targetDate}`, {
         method: 'POST',
-        signal: AbortSignal.timeout(570_000), // 9.5 min — just under Cloud Run's 600s limit
+        signal: AbortSignal.timeout(3_540_000), // 59 min — just under Cloud Run's 3600s limit
       });
 
       if (!upstream.ok) {
@@ -46,6 +55,10 @@ export const registerIngestionRoutes = (app: Express) => {
 
       const body = await upstream.json();
       console.log('[ingestion] complete', body);
+
+      // Invalidate prediction caches so the mobile app sees fresh data immediately
+      redis.del(...PREDICTION_CACHE_KEYS).catch(() => {});
+
       res.json(body);
     } catch (err) {
       console.error('[ingestion] fetch failed', err);

@@ -1,5 +1,5 @@
 import type { Express, Request, Response, NextFunction } from 'express';
-import { eq, ilike, or, sql, ne } from 'drizzle-orm';
+import { eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, users, rescueRequests, predictions, officialAlerts } from '../../db';
 import { requireAuth } from '../../middleware/requireAuth';
@@ -110,4 +110,5 @@ export const registerAdminRoutes = (app: Express) => {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
 };

@@ -36,7 +36,7 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
   });
 
   // GET /api/flood/predictions/today?risk_min=low|medium|high|critical
-  // Returns predictions for the latest available forecast date (may lag 1-2 days behind real-time)
+  // Returns predictions for the latest available forecast date (may lag ~1 day — IMERG Early ~6h lag).
   app.get('/api/flood/predictions/today', async (req: Request, res: Response) => {
     const riskMin = (req.query.risk_min as string) ?? 'low';
     const minOrder = RISK_ORDER[riskMin as keyof typeof RISK_ORDER] ?? 0;
@@ -51,14 +51,13 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
           .from(predictions);
         const runDate = latestRun[0]?.runDate ?? today;
 
-        // Use the latest available forecast date (CHIRPS lags ~2 days so this may not be today)
         const latestForecast = await db
           .select({ forecastDate: sql<string>`max(${predictions.forecastDate})` })
           .from(predictions)
           .where(eq(predictions.runDate, runDate));
         const forecastDate = latestForecast[0]?.forecastDate ?? today;
 
-        const rows = await db
+        return db
           .select({
             hybasId: predictions.hybasId,
             forecastDate: predictions.forecastDate,
@@ -73,12 +72,10 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
           .where(
             and(
               eq(predictions.forecastDate, forecastDate),
-              eq(predictions.runDate, runDate)
+              eq(predictions.runDate, runDate),
             )
           )
           .orderBy(sql`${predictions.floodProb} desc`);
-
-        return rows;
       });
 
       const filtered = data.filter(
@@ -100,15 +97,16 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
     }
 
     try {
-      const cacheKey = `flood:predictions:basin:${hybasId}`;
+      const today = new Date().toISOString().slice(0, 10);
+      const latestRunRes = await db
+        .select({ runDate: sql<string>`max(${predictions.runDate})` })
+        .from(predictions);
+      const runDate = latestRunRes[0]?.runDate ?? today;
 
-      const data = await cached(redis, cacheKey, CACHE_TTL.predictions, async () => {
-        const latestRun = await db
-          .select({ runDate: sql<string>`max(${predictions.runDate})` })
-          .from(predictions);
-        const runDate = latestRun[0]?.runDate ?? new Date().toISOString().slice(0, 10);
+      const cacheKey = `flood:predictions:basin:${hybasId}:${runDate}`;
 
-        return db
+      const data = await cached(redis, cacheKey, CACHE_TTL.predictions, async () =>
+        db
           .select({
             forecastDate: predictions.forecastDate,
             floodProb: predictions.floodProb,
@@ -121,8 +119,8 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
               eq(predictions.runDate, runDate)
             )
           )
-          .orderBy(predictions.forecastDate);
-      });
+          .orderBy(predictions.forecastDate)
+      );
 
       res.json(data);
     } catch (err) {
@@ -136,13 +134,12 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
     try {
       const today = new Date().toISOString().slice(0, 10);
 
-      const data = await cached(redis, 'flood:alerts', CACHE_TTL.predictions, async () => {
-        const latestRun = await db
-          .select({ runDate: sql<string>`max(${predictions.runDate})` })
-          .from(predictions);
-        const runDate = latestRun[0]?.runDate ?? today;
+      const latestRunRes = await db
+        .select({ runDate: sql<string>`max(${predictions.runDate})` })
+        .from(predictions);
+      const runDate = latestRunRes[0]?.runDate ?? today;
 
-        // Use latest forecastDate within that run (same as predictions/today)
+      const data = await cached(redis, `flood:alerts:${runDate}`, CACHE_TTL.predictions, async () => {
         const latestForecast = await db
           .select({ forecastDate: sql<string>`max(${predictions.forecastDate})` })
           .from(predictions)
@@ -165,7 +162,7 @@ export const registerFloodRoutes = (app: Express, redis: Redis) => {
             and(
               inArray(predictions.riskLevel, ['high', 'critical']),
               eq(predictions.forecastDate, forecastDate),
-              eq(predictions.runDate, runDate)
+              eq(predictions.runDate, runDate),
             )
           )
           .orderBy(sql`${predictions.floodProb} desc`);

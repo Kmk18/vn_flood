@@ -10,6 +10,8 @@ import {
   date,
   index,
   unique,
+  text,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -48,7 +50,7 @@ export const basinWeather = pgTable(
     id: serial('id').primaryKey(),
     hybasId: bigint('hybas_id', { mode: 'number' })
       .notNull()
-      .references(() => basins.hybasId),
+      .references(() => basins.hybasId, { onDelete: 'cascade' }),
     date: date('date').notNull(),
     precipMm: real('precip_mm'),
   },
@@ -65,7 +67,7 @@ export const predictions = pgTable(
     id: serial('id').primaryKey(),
     hybasId: bigint('hybas_id', { mode: 'number' })
       .notNull()
-      .references(() => basins.hybasId),
+      .references(() => basins.hybasId, { onDelete: 'cascade' }),
     forecastDate: date('forecast_date').notNull(),
     runDate: date('run_date').notNull(),
     floodProb: real('flood_prob').notNull(),
@@ -83,7 +85,7 @@ export const alerts = pgTable('alerts', {
   id: serial('id').primaryKey(),
   hybasId: bigint('hybas_id', { mode: 'number' })
     .notNull()
-    .references(() => basins.hybasId),
+    .references(() => basins.hybasId, { onDelete: 'cascade' }),
   forecastDate: date('forecast_date').notNull(),
   riskLevel: varchar('risk_level', { length: 10 }).notNull(),
   sentAt: timestamp('sent_at').notNull().defaultNow(),
@@ -121,6 +123,8 @@ export const rescueRequests = pgTable('rescue_requests', {
   // 'open' | 'assigned' | 'resolved'
   status: varchar('status', { length: 20 }).notNull().default('open'),
   notes: varchar('notes', { length: 500 }),
+  photos: text('photos').array().default([]),
+  assignedUsers: jsonb('assigned_users').$type<{ id: number; name: string }[]>().notNull().default([]),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
