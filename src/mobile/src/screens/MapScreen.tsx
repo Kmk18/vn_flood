@@ -320,15 +320,6 @@ export const MapScreen = () => {
     activeRescueRef.current = null;
   };
 
-  const dismissAll = () => {
-    LayoutAnimation.configureNext(LAYOUT_ANIM);
-    setSelectedBasin(null);
-    setSelectedRescue(null);
-    activeRescueRef.current = null;
-    setRoute(null);
-    setShowSuggestions(false);
-    setShowSettings(false);
-  };
 
   // Memoized so hundreds of polygons don't re-mount on every location tick / search keystroke
   const polygonChildren = useMemo(() =>
@@ -401,7 +392,6 @@ export const MapScreen = () => {
         toolbarEnabled={false}
         showsCompass={false}
         zoomControlEnabled={false}
-        onPress={dismissAll}
       >
         {/* Route polyline */}
         {route && (
