@@ -641,17 +641,17 @@ export const MapScreen = () => {
             HIỂN THỊ TỪ MỨC RỦI RO
           </Text>
           <View style={GlobalStyles.mapRiskRow}>
-            {RISK_ORDER.map((risk) => {
+            {(RISK_ORDER.filter((r) => r !== 'low') as Exclude<RiskLevel, 'low'>[]).map((risk) => {
               const active = filterMinRisk === risk;
               return (
                 <TouchableOpacity
                   key={risk}
-                  onPress={() => setFilterMinRisk(risk)}
+                  onPress={() => setFilterMinRisk(risk as Exclude<RiskLevel, 'low'>)}
                   style={[GlobalStyles.mapRiskChip, { backgroundColor: active ? RISK_COLORS[risk] : themeColors.secondary }]}
                 >
                   <View style={[GlobalStyles.mapRiskDot, { backgroundColor: active ? '#fff' : RISK_COLORS[risk] }]} />
                   <Text style={[Typography.body2, { color: active ? '#fff' : themeColors.text, fontWeight: active ? '700' : '400' }]}>
-                    {RISK_LABELS[risk]}+
+                    {RISK_LABELS[risk as RiskLevel]}+
                   </Text>
                 </TouchableOpacity>
               );

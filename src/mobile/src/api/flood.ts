@@ -17,8 +17,8 @@ export interface ForecastDay {
 }
 
 export const floodApi = {
-  getToday: () =>
-    api.get<TodayPrediction[]>('/api/flood/predictions/today').then((r) => r.data),
+  getToday: (riskMin: 'medium' | 'high' | 'critical' = 'medium') =>
+    api.get<TodayPrediction[]>('/api/flood/predictions/today', { params: { risk_min: riskMin } }).then((r) => r.data),
 
   getBasinForecast: (hybasId: number) =>
     api.get<ForecastDay[]>(`/api/flood/predictions/basin/${hybasId}`).then((r) => r.data),

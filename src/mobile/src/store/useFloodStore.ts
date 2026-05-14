@@ -44,20 +44,20 @@ interface FloodState {
   basins: BasinForecast[];
   alerts: BasinForecast[];
   selectedBasin: BasinForecast | null;
-  filterMinRisk: RiskLevel;
+  filterMinRisk: Exclude<RiskLevel, 'low'>;
   isLoading: boolean;
   lastFetched: number;
   fetchData: (force?: boolean) => Promise<void>;
   fetchForecast: (hybasId: number) => Promise<void>;
   setSelectedBasin: (basin: BasinForecast | null) => void;
-  setFilterMinRisk: (risk: RiskLevel) => void;
+  setFilterMinRisk: (risk: Exclude<RiskLevel, 'low'>) => void;
 }
 
 export const useFloodStore = create<FloodState>((set, get) => ({
   basins: [],
   alerts: [],
   selectedBasin: null,
-  filterMinRisk: 'low',
+  filterMinRisk: 'medium',
   isLoading: false,
   lastFetched: 0,
 
