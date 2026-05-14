@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { MapScreen } from '../screens/MapScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { ChatbotScreen } from '../screens/ChatbotScreen';
@@ -10,6 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/useTheme';
 import { useFloodStore } from '../store/useFloodStore';
 import { useAlertStore } from '../store/useAlertStore';
+import { useLocationStore } from '../store/useLocationStore';
+import { useResponderStore } from '../store/useResponderStore';
+import type { RescuePoint } from '../api/rescue';
 
 const Tab = createBottomTabNavigator();
 
@@ -32,8 +36,31 @@ export const TabNavigator = () => {
   const [rescueOpen, setRescueOpen] = useState(false);
   const fetchData = useFloodStore((s) => s.fetchData);
   const fetchAlerts = useAlertStore((s) => s.fetchAlerts);
+  const { shareLocation } = useLocationStore();
+  const { setPendingNav } = useResponderStore();
+  const navigation = useNavigation<any>();
 
   useEffect(() => { fetchData(); fetchAlerts(); }, []);
+
+  const handleSosPress = () => {
+    if (!shareLocation) {
+      Alert.alert(
+        'Cần bật vị trí',
+        'Bật chia sẻ vị trí để đội cứu hộ biết chính xác nơi bạn cần giúp đỡ.',
+        [
+          { text: 'Đóng', style: 'cancel' },
+          { text: 'Mở Cài đặt', onPress: () => navigation.navigate('AppSettings' as never) },
+        ],
+      );
+      return;
+    }
+    setRescueOpen(true);
+  };
+
+  const handleShelterSelect = (shelter: RescuePoint) => {
+    setPendingNav({ id: shelter.id, lat: shelter.lat, lon: shelter.lon, label: shelter.name });
+    setRescueOpen(false);
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -71,7 +98,7 @@ export const TabNavigator = () => {
             tabBarButton: () => (
               <SOSButton
                 color={colors.danger}
-                onPress={() => setRescueOpen(true)}
+                onPress={handleSosPress}
               />
             ),
           }}
@@ -81,7 +108,11 @@ export const TabNavigator = () => {
         <Tab.Screen name="Hồ sơ" component={ProfileScreen} />
       </Tab.Navigator>
 
-      <RescueBottomSheet visible={rescueOpen} onClose={() => setRescueOpen(false)} />
+      <RescueBottomSheet
+        visible={rescueOpen}
+        onClose={() => setRescueOpen(false)}
+        onSelectShelter={handleShelterSelect}
+      />
     </View>
   );
 };

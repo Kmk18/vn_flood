@@ -310,6 +310,12 @@ export const MapScreen = () => {
     if (selectedRescue) fetchRoute(selectedRescue);
   };
 
+  const handleDismissPanel = () => {
+    LayoutAnimation.configureNext(LAYOUT_ANIM);
+    setSelectedRescue(null);
+    // route stays on the map until explicitly cleared
+  };
+
   const handleClearRoute = () => {
     LayoutAnimation.configureNext(LAYOUT_ANIM);
     setRoute(null);
@@ -608,7 +614,7 @@ export const MapScreen = () => {
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={handleClearRoute}
+                onPress={handleDismissPanel}
                 style={GlobalStyles.mapCloseBtn}
               >
                 <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>✕</Text>
@@ -659,7 +665,7 @@ export const MapScreen = () => {
               {route && (
                 <TouchableOpacity
                   style={[styles.routeBtn, { backgroundColor: themeColors.secondary, borderWidth: 1, borderColor: themeColors.border }]}
-                  onPress={() => setRoute(null)}
+                  onPress={handleClearRoute}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="close-circle-outline" size={16} color={themeColors.text} />

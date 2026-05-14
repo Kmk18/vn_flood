@@ -1,14 +1,27 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Animated,
   Dimensions, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { useNavigation } from '@react-navigation/native';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { rescueApi, RescuePoint } from '../api/rescue';
 import { useLocationStore } from '../store/useLocationStore';
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function fmtDist(km: number): string {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.56);
@@ -16,11 +29,11 @@ const SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.56);
 interface Props {
   visible: boolean;
   onClose: () => void;
+  onSelectShelter?: (shelter: RescuePoint) => void;
 }
 
-export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
+export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectShelter }) => {
   const { colors: themeColors } = useTheme();
-  const navigation = useNavigation<any>();
   const shareLocation = useLocationStore((s) => s.shareLocation);
   const locationRef = useRef<{ lat: number; lon: number } | null>(null);
 
@@ -28,6 +41,8 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
   const [submitted, setSubmitted] = useState(false);
   const [description, setDescription] = useState('');
   const [peopleCount, setPeopleCount] = useState(1);
+  const [peopleText, setPeopleText] = useState('1');
+  const [userLoc, setUserLoc] = useState<{ lat: number; lon: number } | null>(null);
   const [shelters, setShelters] = useState<RescuePoint[]>([]);
 
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
@@ -45,7 +60,11 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
     rescueApi.getPoints().then(setShelters).catch(() => {});
     if (shareLocation) {
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-        .then((loc) => { locationRef.current = { lat: loc.coords.latitude, lon: loc.coords.longitude }; })
+        .then((loc) => {
+          const coords = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+          locationRef.current = coords;
+          setUserLoc(coords);
+        })
         .catch(() => {});
     }
   }, [visible, shareLocation]);
@@ -64,6 +83,8 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
         setSubmitted(false);
         setDescription('');
         setPeopleCount(1);
+        setPeopleText('1');
+        setUserLoc(null);
         holdProgress.setValue(0);
       });
     }
@@ -96,17 +117,18 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
     return () => loops.forEach((l) => l.stop());
   }, [mounted]);
 
+  const sortedShelters = useMemo(() => {
+    if (!userLoc || shelters.length === 0) return shelters.slice(0, 10);
+    return [...shelters]
+      .map((s) => ({ ...s, distKm: haversineKm(userLoc.lat, userLoc.lon, s.lat, s.lon) }))
+      .sort((a, b) => a.distKm - b.distKm)
+      .slice(0, 10);
+  }, [shelters, userLoc]);
+
   const onPressIn = () => {
     if (submitted) return;
-    if (!shareLocation || !locationRef.current) {
-      Alert.alert(
-        'Cần bật vị trí',
-        'Bật chia sẻ vị trí để đội cứu hộ biết chính xác nơi bạn cần giúp đỡ.',
-        [
-          { text: 'Đóng', style: 'cancel' },
-          { text: 'Mở Cài đặt', onPress: () => { onClose(); navigation.navigate('AppSettings'); } },
-        ],
-      );
+    if (!locationRef.current) {
+      Alert.alert('Chưa lấy được vị trí', 'Vui lòng đợi một chút rồi thử lại.');
       return;
     }
     holdProgress.setValue(0);
@@ -212,15 +234,40 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
           </Text>
           <View style={styles.stepperRow}>
             <TouchableOpacity
-              onPress={() => setPeopleCount((n) => Math.max(1, n - 1))}
+              onPress={() => {
+                const n = Math.max(1, peopleCount - 1);
+                setPeopleCount(n);
+                setPeopleText(String(n));
+              }}
               style={[styles.stepperBtn, { backgroundColor: themeColors.secondary }]}
               activeOpacity={0.7}
             >
               <Text style={[styles.stepperBtnText, { color: themeColors.text }]}>−</Text>
             </TouchableOpacity>
-            <Text style={[styles.stepperValue, { color: themeColors.text }]}>{peopleCount}</Text>
+            <TextInput
+              style={[styles.stepperValue, { color: themeColors.text }]}
+              value={peopleText}
+              onChangeText={(t) => {
+                const clean = t.replace(/\D/g, '');
+                setPeopleText(clean);
+                const n = parseInt(clean, 10);
+                if (!isNaN(n) && n >= 1 && n <= 100) setPeopleCount(n);
+              }}
+              onBlur={() => {
+                const n = Math.max(1, Math.min(100, parseInt(peopleText, 10) || 1));
+                setPeopleCount(n);
+                setPeopleText(String(n));
+              }}
+              keyboardType="numeric"
+              selectTextOnFocus
+              textAlign="center"
+            />
             <TouchableOpacity
-              onPress={() => setPeopleCount((n) => Math.min(100, n + 1))}
+              onPress={() => {
+                const n = Math.min(100, peopleCount + 1);
+                setPeopleCount(n);
+                setPeopleText(String(n));
+              }}
               style={[styles.stepperBtn, { backgroundColor: themeColors.secondary }]}
               activeOpacity={0.7}
             >
@@ -243,17 +290,19 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
             ĐIỂM SƠ TÁN GẦN NHẤT
           </Text>
           <View style={{ backgroundColor: themeColors.secondary }}>
-            {shelters.length === 0 ? (
+            {sortedShelters.length === 0 ? (
               <Text style={[Typography.caption, { color: themeColors.textSecondary, padding: Spacing.m }]}>
                 Đang tải điểm sơ tán...
               </Text>
-            ) : shelters.map((shelter, i, arr) => (
-              <View
+            ) : sortedShelters.map((shelter, i, arr) => (
+              <TouchableOpacity
                 key={shelter.id}
                 style={[
                   styles.shelterRow,
                   i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: themeColors.border },
                 ]}
+                onPress={() => { onSelectShelter?.(shelter); onClose(); }}
+                activeOpacity={0.7}
               >
                 <View style={[styles.shelterBadge, { backgroundColor: themeColors.primary }]}>
                   <Text style={styles.shelterBadgeText}>{i + 1}</Text>
@@ -263,10 +312,15 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose }) => {
                     {shelter.name}
                   </Text>
                   <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: 2 }]}>
-                    {shelter.address} · Sức chứa {shelter.capacity} người
+                    {[
+                      shelter.address || shelter.province,
+                      shelter.capacity ? `${shelter.capacity} người` : null,
+                      'distKm' in shelter ? fmtDist((shelter as any).distKm) : null,
+                    ].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
-              </View>
+                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>›</Text>
+              </TouchableOpacity>
             ))}
           </View>
 
