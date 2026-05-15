@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
+  View, Text, ScrollView, Image, TouchableOpacity, TextInput,
   StyleSheet, Platform, LayoutAnimation, ActivityIndicator, Alert,
 } from 'react-native';
 import MapView, { Marker, Polygon, Polyline, PROVIDER_DEFAULT, MapType } from 'react-native-maps';
@@ -17,9 +17,19 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useResponderStore } from '../store/useResponderStore';
 import basinPolygons from '../assets/vietnamBasinPolygons';
 import { BasinForecast } from '../mock/floodData';
-import { rescueApi, RescuePoint } from '../api/rescue';
+import { rescueApi, RescuePoint, RescueRequest } from '../api/rescue';
+import { API_URL } from '../api/client';
 
 const LAYOUT_ANIM = LayoutAnimation.create(220, 'easeInEaseOut', 'opacity');
+
+function timeAgo(createdAt: string) {
+  const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+  if (mins < 1) return 'vừa xong';
+  if (mins < 60) return `${mins} phút trước`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} giờ trước`;
+  return `${Math.floor(hrs / 24)} ngày trước`;
+}
 
 const DARK_MAP_STYLE = [
   { elementType: 'geometry.fill',                                                           stylers: [{ visibility: 'on' }, { color: '#324447' }] },
@@ -60,10 +70,6 @@ interface RouteInfo {
   durationMin: number;
 }
 
-const REQUEST_PIN_COLOR: Record<string, string> = {
-  open: '#E74C3C',
-  assigned: '#F39C12',
-};
 
 export const MapScreen = () => {
   const navigation = useNavigation();
@@ -93,8 +99,9 @@ export const MapScreen = () => {
   const [showRescueRequests, setShowRescueRequests] = useState(true);
 
   // Rescue points + routing
-  const [rescuePoints, setRescuePoints]     = useState<RescuePoint[]>([]);
-  const [selectedRescue, setSelectedRescue] = useState<RescuePoint | null>(null);
+  const [rescuePoints, setRescuePoints]       = useState<RescuePoint[]>([]);
+  const [selectedRescue, setSelectedRescue]   = useState<RescuePoint | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<RescueRequest | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [route, setRoute]                   = useState<RouteInfo | null>(null);
   const [isRouting, setIsRouting]           = useState(false);
@@ -179,30 +186,36 @@ export const MapScreen = () => {
   useEffect(() => { loadRescueRequests(); }, [loadRescueRequests]);
 
   // On focus: refresh requests + handle accepted request routed back from ResponderScreen
-  useFocusEffect(useCallback(() => {
-    loadRescueRequests();
-    if (pendingNav) {
-      const point: RescuePoint = {
-        id: pendingNav.id,
-        name: pendingNav.label,
-        lat: pendingNav.lat,
-        lon: pendingNav.lon,
-        capacity: 0,
-        province: '',
-        address: '',
-        isActive: true,
-      };
-      LayoutAnimation.configureNext(LAYOUT_ANIM);
-      setSelectedRescue(point);
-      setPanelCollapsed(false);
-      activeRescueRef.current = point;
-      setSelectedBasin(null);
-      setShowSuggestions(false);
-      setShowSettings(false);
-      setRoute(null);
-      setPendingNav(null);
-    }
-  }, [loadRescueRequests, pendingNav, setPendingNav, setSelectedBasin]));
+  useFocusEffect(useCallback(() => { loadRescueRequests(); }, [loadRescueRequests]));
+
+  // Handle navigation to a rescue point set from the SOS sheet or ResponderScreen.
+  // Needs useEffect (not useFocusEffect) so it fires even when MapScreen is already focused.
+  useEffect(() => {
+    if (!pendingNav) return;
+    const point: RescuePoint = {
+      id: pendingNav.id,
+      name: pendingNav.label,
+      lat: pendingNav.lat,
+      lon: pendingNav.lon,
+      capacity: 0,
+      province: '',
+      address: '',
+      isActive: true,
+    };
+    LayoutAnimation.configureNext(LAYOUT_ANIM);
+    setSelectedRescue(point);
+    setPanelCollapsed(false);
+    activeRescueRef.current = point;
+    setSelectedBasin(null);
+    setShowSuggestions(false);
+    setShowSettings(false);
+    setRoute(null);
+    mapRef.current?.animateToRegion(
+      { latitude: point.lat, longitude: point.lon, latitudeDelta: 0.05, longitudeDelta: 0.05 },
+      600,
+    );
+    setPendingNav(null);
+  }, [pendingNav, setPendingNav, setSelectedBasin]);
 
   // ── OSRM routing ───────────────────────────────────────────────────────────
   const fetchRoute = useCallback(async (dest: RescuePoint, showLoader = true) => {
@@ -320,7 +333,6 @@ export const MapScreen = () => {
     activeRescueRef.current = null;
   };
 
-
   // Memoized so hundreds of polygons don't re-mount on every location tick / search keystroke
   const polygonChildren = useMemo(() =>
     Object.entries(basinPolygons).map(([id, poly]) => {
@@ -347,16 +359,22 @@ export const MapScreen = () => {
   const requestMarkers = useMemo(() =>
     rescueRequests
       .filter((r) => r.status !== 'resolved')
-      .map((r) => (
-        <Marker
-          key={`req-${r.id}`}
-          coordinate={{ latitude: r.lat, longitude: r.lon }}
-          pinColor={REQUEST_PIN_COLOR[r.status] ?? '#E74C3C'}
-          title={`Yêu cầu #${r.id}`}
-          description={`${r.peopleCount} người · ${r.status === 'open' ? 'Chờ xử lý' : 'Đang xử lý'}`}
-        />
-      )),
-  [rescueRequests]);
+      .map((r) => {
+        const pinColor = r.status === 'open' ? themeColors.danger : themeColors.warning;
+        return (
+          <Marker
+            key={`req-${r.id}`}
+            coordinate={{ latitude: r.lat, longitude: r.lon }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            onPress={() => setSelectedRequest(r)}
+          >
+            <View style={[styles.requestPin, { backgroundColor: pinColor }]}>
+              <Ionicons name="alert" size={12} color="#fff" />
+            </View>
+          </Marker>
+        );
+      }),
+  [rescueRequests, themeColors, setSelectedRequest]);
 
   // Memoized so custom-view markers don't re-render on location ticks
   const rescueMarkers = useMemo(() =>
@@ -802,6 +820,48 @@ export const MapScreen = () => {
           </View>
         </View>
       )}
+
+      {/* ── Request info card (tapping a rescue request pin) ── */}
+      {selectedRequest && (
+        <View style={[styles.reqCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+          <View style={styles.reqCardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.s, flex: 1 }}>
+              <View style={[styles.statusDotReq, {
+                backgroundColor: selectedRequest.status === 'open' ? themeColors.danger : themeColors.warning,
+              }]} />
+              <Text style={[Typography.body2, { color: themeColors.text, fontWeight: '700' }]}>
+                Yêu cầu #{selectedRequest.id}
+              </Text>
+              <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
+                · {timeAgo(selectedRequest.createdAt)}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setSelectedRequest(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={18} color={themeColors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
+            {selectedRequest.status === 'open' ? 'Chờ xử lý' : 'Đang xử lý'} · {selectedRequest.peopleCount} người
+          </Text>
+          {selectedRequest.notes ? (
+            <Text style={[Typography.body2, { color: themeColors.text, marginTop: Spacing.xs }]} numberOfLines={2}>
+              {selectedRequest.notes}
+            </Text>
+          ) : null}
+          {(selectedRequest.assignedUsers ?? []).length > 0 && (
+            <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: Spacing.xs }]}>
+              Tiếp nhận: {(selectedRequest.assignedUsers ?? []).map((u) => u.name).join(', ')}
+            </Text>
+          )}
+          {(selectedRequest.photos ?? []).length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: Spacing.s }}>
+              {(selectedRequest.photos ?? []).map((p, i) => (
+                <Image key={i} source={{ uri: `${API_URL}${p}` }} style={styles.reqCardPhoto} />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      )}
     </View>
   );
 };
@@ -900,4 +960,40 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.m,
     gap: Spacing.xs,
   },
+  requestPin: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  reqCard: {
+    position: 'absolute',
+    bottom: 100,
+    left: Spacing.m,
+    right: Spacing.m,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.m,
+    zIndex: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  reqCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  statusDotReq: { width: 8, height: 8, borderRadius: 4 },
+  reqCardPhoto: { width: 80, height: 80, borderRadius: 8, marginRight: Spacing.s },
 });

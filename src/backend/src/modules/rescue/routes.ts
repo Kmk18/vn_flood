@@ -2,8 +2,17 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import type { Redis } from 'ioredis';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
 import { db, rescuePoints, rescueRequests, users } from '../../db';
 import { requireAuth } from '../../middleware/requireAuth';
+
+const storage = multer.diskStorage({
+  destination: path.join(process.cwd(), 'uploads'),
+  filename: (_req, file, cb) =>
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname)}`),
+});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024, files: 5 } });
 
 const requireAuthority = (req: Request, res: Response, next: NextFunction) => {
   if (req.user!.role === 'user') {
@@ -44,9 +53,9 @@ const updatePointSchema = createPointSchema.partial().extend({
 });
 
 const createRequestSchema = z.object({
-  lat: z.number().min(-90).max(90),
-  lon: z.number().min(-180).max(180),
-  peopleCount: z.number().int().min(1).max(100).default(1),
+  lat: z.coerce.number().min(-90).max(90),
+  lon: z.coerce.number().min(-180).max(180),
+  peopleCount: z.coerce.number().int().min(1).max(100).default(1),
   notes: z.string().max(500).optional(),
 });
 
@@ -68,7 +77,7 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
   });
 
   // POST /api/rescue/requests — create a rescue request (auth required)
-  app.post('/api/rescue/requests', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/rescue/requests', requireAuth, upload.array('photos', 5), async (req: Request, res: Response) => {
     const result = createRequestSchema.safeParse(req.body);
     if (!result.success) {
       res.status(400).json({ error: result.error.issues });
@@ -77,14 +86,16 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
 
     const userId = req.user!.sub;
     const { lat, lon, peopleCount, notes } = result.data;
+    const files = (req.files ?? []) as Express.Multer.File[];
+    const photos = files.map((f) => `/uploads/${f.filename}`);
 
     try {
       const [request] = await db
         .insert(rescueRequests)
-        .values({ userId, lat, lon, peopleCount, notes, status: 'open', assignedUsers: [] })
+        .values({ userId, lat, lon, peopleCount, notes, photos, status: 'open', assignedUsers: [] })
         .returning();
 
-      log('request:created', { id: request.id, userId, lat, lon, peopleCount });
+      log('request:created', { id: request.id, userId, lat, lon, peopleCount, photos: photos.length });
       res.status(201).json(request);
     } catch (err) {
       console.error('[rescue] request:create:error', err);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
+  View, Text, ScrollView, Image, TouchableOpacity, TextInput,
   StyleSheet, Alert, ActivityIndicator, RefreshControl,
   Switch, Linking, Platform,
 } from 'react-native';
@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { rescueApi, RescuePoint, RescueRequest } from '../api/rescue';
+import { API_URL } from '../api/client';
 import { useResponderStore } from '../store/useResponderStore';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -44,81 +45,91 @@ interface RequestCardProps {
 const RequestCard: React.FC<RequestCardProps> = ({ req, currentUserId, onAccept, onResolve, updatingId, colors }) => {
   const assignedUsers = req.assignedUsers ?? [];
   const isAssignedToMe = assignedUsers.some((u) => u.id === currentUserId);
-  const alreadyAccepted = isAssignedToMe;
   const busy = updatingId === req.id;
 
+  const timeAgo = (() => {
+    const mins = Math.floor((Date.now() - new Date(req.createdAt).getTime()) / 60000);
+    if (mins < 1) return 'vừa xong';
+    if (mins < 60) return `${mins} phút trước`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} giờ trước`;
+    return `${Math.floor(hrs / 24)} ngày trước`;
+  })();
+
   return (
-    <View style={[styles.card, { backgroundColor: colors.card }]}>
-      <View style={[styles.cardAccent, { backgroundColor: STATUS_COLOR[req.status] ?? colors.border }]} />
-      <View style={styles.cardInner}>
-        {/* Header row */}
-        <View style={styles.cardHeader}>
-          <Text style={[Typography.body2, { color: colors.text, fontWeight: '700' }]}>
-            YÊU CẦU #{req.id}
-          </Text>
-          <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-            {req.peopleCount} người
-          </Text>
-        </View>
-
-        <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-          {req.lat.toFixed(5)}°N, {req.lon.toFixed(5)}°E
+    <View style={[styles.feedItem, { borderBottomColor: colors.border }]}>
+      {/* Meta line */}
+      <View style={styles.feedMeta}>
+        <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR[req.status] ?? colors.border }]} />
+        <Text style={[Typography.body2, { color: colors.text, fontWeight: '700', flex: 1 }]}>
+          Yêu cầu #{req.id} · {req.peopleCount} người
         </Text>
-        {req.notes ? (
-          <Text style={[Typography.caption, { color: colors.text, marginTop: Spacing.xs }]} numberOfLines={2}>
-            {req.notes}
-          </Text>
-        ) : null}
-        <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-          {new Date(req.createdAt).toLocaleString('vi-VN')}
-        </Text>
+        <Text style={[Typography.caption, { color: colors.textSecondary }]}>{timeAgo}</Text>
+      </View>
 
-        {/* Assigned users list */}
-        {assignedUsers.length > 0 && (
-          <View style={[styles.assigneeList, { backgroundColor: colors.background }]}>
-            <Text style={[Typography.label, { color: colors.textSecondary, marginBottom: 2 }]}>NGƯỜI TIẾP NHẬN</Text>
-            {assignedUsers.map((u) => (
-              <View key={u.id} style={styles.assigneeRow}>
-                <Ionicons name="person-circle-outline" size={14} color={colors.primary} />
-                <Text style={[Typography.caption, { color: colors.text, marginLeft: 4 }]}>{u.name}</Text>
-                {u.id === currentUserId && (
-                  <Text style={[Typography.label, { color: colors.primary, marginLeft: 4 }]}>(bạn)</Text>
-                )}
-              </View>
-            ))}
+      {/* Notes */}
+      {req.notes ? (
+        <Text style={[Typography.body1, { color: colors.text, marginBottom: Spacing.xs }]} numberOfLines={3}>
+          {req.notes}
+        </Text>
+      ) : null}
+
+      {/* Location */}
+      <Text style={[Typography.caption, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>
+        {req.lat.toFixed(5)}°N, {req.lon.toFixed(5)}°E
+      </Text>
+
+      {/* Photos */}
+      {(req.photos ?? []).length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoStrip}>
+          {(req.photos ?? []).map((p, i) => (
+            <Image key={i} source={{ uri: `${API_URL}${p}` }} style={styles.photoThumb} />
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Assignees inline */}
+      {assignedUsers.length > 0 && (
+        <Text style={[Typography.caption, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>
+          Tiếp nhận bởi{' '}
+          {assignedUsers.map((u, i) => (
+            <Text key={u.id} style={{ color: u.id === currentUserId ? colors.primary : colors.text, fontWeight: '600' }}>
+              {u.name + (i < assignedUsers.length - 1 ? ', ' : '')}
+            </Text>
+          ))}
+        </Text>
+      )}
+
+      {/* Action bar */}
+      <View style={[styles.feedActions, { borderTopColor: colors.border }]}>
+        {!isAssignedToMe && (
+          <TouchableOpacity style={styles.feedAction} onPress={() => onAccept(req)} disabled={busy} activeOpacity={0.7}>
+            {busy
+              ? <ActivityIndicator size="small" color={colors.warning} />
+              : <>
+                  <Ionicons name="hand-left-outline" size={16} color={colors.warning} />
+                  <Text style={[Typography.label, { color: colors.warning, marginLeft: 4 }]}>Tiếp nhận</Text>
+                </>
+            }
+          </TouchableOpacity>
+        )}
+        {isAssignedToMe && req.status !== 'resolved' && (
+          <TouchableOpacity style={styles.feedAction} onPress={() => onResolve(req.id)} disabled={busy} activeOpacity={0.7}>
+            {busy
+              ? <ActivityIndicator size="small" color={colors.success} />
+              : <>
+                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+                  <Text style={[Typography.label, { color: colors.success, marginLeft: 4 }]}>Hoàn thành</Text>
+                </>
+            }
+          </TouchableOpacity>
+        )}
+        {isAssignedToMe && (
+          <View style={[styles.feedAction, { opacity: 0.5 }]}>
+            <Ionicons name="checkmark-done-outline" size={14} color={colors.primary} />
+            <Text style={[Typography.label, { color: colors.primary, marginLeft: 4 }]}>Đã tiếp nhận</Text>
           </View>
         )}
-
-        {/* Actions */}
-        <View style={styles.actionRow}>
-          {!alreadyAccepted && (
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: '#F39C1222' }]}
-              onPress={() => onAccept(req)}
-              disabled={busy}
-              activeOpacity={0.8}
-            >
-              {busy
-                ? <ActivityIndicator size="small" color="#F39C12" />
-                : <Text style={[Typography.label, { color: '#F39C12' }]}>TIẾP NHẬN</Text>
-              }
-            </TouchableOpacity>
-          )}
-
-          {isAssignedToMe && req.status !== 'resolved' && (
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: '#2ECC7122' }]}
-              onPress={() => onResolve(req.id)}
-              disabled={busy}
-              activeOpacity={0.8}
-            >
-              {busy
-                ? <ActivityIndicator size="small" color="#2ECC71" />
-                : <Text style={[Typography.label, { color: '#2ECC71' }]}>HOÀN THÀNH</Text>
-              }
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
     </View>
   );
@@ -142,6 +153,7 @@ export const ResponderScreen = () => {
 
   // Points state
   const [points, setPoints] = useState<RescuePoint[]>([]);
+  const [pointSearch, setPointSearch] = useState('');
   const [showAddPoint, setShowAddPoint] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAddress, setNewAddress] = useState('');
@@ -328,29 +340,27 @@ export const ResponderScreen = () => {
                 Chưa có yêu cầu nào hoàn thành.
               </Text>
             : <View style={styles.listGap}>
-                {resolvedReqs.map((req) => (
-                  <View key={req.id} style={[styles.resolvedCard, { backgroundColor: colors.card }]}>
-                    <View style={[styles.cardAccent, { backgroundColor: STATUS_COLOR.resolved }]} />
-                    <View style={styles.cardInner}>
-                      <View style={styles.cardHeader}>
-                        <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]}>
-                          YÊU CẦU #{req.id}
+                {resolvedReqs.map((req) => {
+                  const assignedUsers = req.assignedUsers ?? [];
+                  return (
+                    <View key={req.id} style={[styles.feedItem, { borderBottomColor: colors.border, opacity: 0.75 }]}>
+                      <View style={styles.feedMeta}>
+                        <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR.resolved }]} />
+                        <Text style={[Typography.body2, { color: colors.text, fontWeight: '700', flex: 1 }]}>
+                          Yêu cầu #{req.id} · {req.peopleCount} người
                         </Text>
                         <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-                          {req.peopleCount} người
+                          {new Date(req.updatedAt).toLocaleString('vi-VN')}
                         </Text>
                       </View>
-                      {(req.assignedUsers ?? []).length > 0 && (
-                        <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                          Cứu hộ: {(req.assignedUsers ?? []).map((u) => u.name).join(', ')}
+                      {assignedUsers.length > 0 && (
+                        <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+                          Cứu hộ: {assignedUsers.map((u) => u.name).join(', ')}
                         </Text>
                       )}
-                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                        {new Date(req.updatedAt).toLocaleString('vi-VN')}
-                      </Text>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
           }
         </ScrollView>
@@ -358,113 +368,138 @@ export const ResponderScreen = () => {
 
       {/* ── Evacuation points ── */}
       {activeTab === 'points' && (
-        <ScrollView
-          contentContainerStyle={styles.body}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-        >
-          <TouchableOpacity
-            style={[styles.addBtn, { borderColor: colors.primary }]}
-            onPress={() => setShowAddPoint((v) => !v)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name={showAddPoint ? 'remove' : 'add'} size={20} color={colors.primary} />
-            <Text style={[Typography.button, { color: colors.primary, marginLeft: Spacing.s }]}>
-              {showAddPoint ? 'ĐÓNG FORM' : 'THÊM ĐIỂM SƠ TÁN'}
-            </Text>
-          </TouchableOpacity>
-
-          {showAddPoint && (
-            <View style={[styles.formCard, { backgroundColor: colors.card }]}>
-              <Text style={[Typography.label, { color: colors.textSecondary }]}>TÊN ĐIỂM</Text>
+        <View style={{ flex: 1 }}>
+          <View style={[styles.pointsToolbar, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+            <View style={[styles.pointSearchBar, { backgroundColor: colors.secondary }]}>
+              <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
               <TextInput
-                style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
-                placeholder="VD: Trường THCS Lê Lợi"
+                style={[styles.pointSearchInput, { color: colors.text }]}
+                placeholder="Tìm điểm sơ tán..."
                 placeholderTextColor={colors.textSecondary}
-                value={newName}
-                onChangeText={setNewName}
+                value={pointSearch}
+                onChangeText={setPointSearch}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
               />
-              <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>ĐỊA CHỈ</Text>
-              <TextInput
-                style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
-                placeholder="Số nhà, đường, phường..."
-                placeholderTextColor={colors.textSecondary}
-                value={newAddress}
-                onChangeText={setNewAddress}
-              />
-              <View style={styles.twoCol}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>SỨC CHỨA</Text>
-                  <TextInput
-                    style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
-                    placeholder="Số người"
-                    placeholderTextColor={colors.textSecondary}
-                    value={newCapacity}
-                    onChangeText={setNewCapacity}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={{ flex: 1, marginLeft: Spacing.m }}>
-                  <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>TỈNH / TP</Text>
-                  <TextInput
-                    style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
-                    placeholder="Tỉnh..."
-                    placeholderTextColor={colors.textSecondary}
-                    value={newProvince}
-                    onChangeText={setNewProvince}
-                  />
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: addingPoint ? colors.textSecondary : colors.primary, marginTop: Spacing.m }]}
-                onPress={handleAddPoint}
-                disabled={addingPoint}
-                activeOpacity={0.8}
-              >
-                {addingPoint
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={[Typography.button, { color: '#fff' }]}>LƯU ĐIỂM</Text>
-                }
-              </TouchableOpacity>
             </View>
-          )}
+            <TouchableOpacity
+              style={[styles.pointAddBtn, { backgroundColor: showAddPoint ? colors.primary : colors.secondary }]}
+              onPress={() => setShowAddPoint((v) => !v)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={showAddPoint ? 'close' : 'add'} size={22} color={showAddPoint ? '#fff' : colors.primary} />
+            </TouchableOpacity>
+          </View>
 
-          {points.length === 0
-            ? <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
-                Chưa có điểm sơ tán nào.
-              </Text>
-            : <View style={styles.listGap}>
-                {points.map((point) => (
-                  <View key={point.id} style={[styles.pointCard, { backgroundColor: colors.card }]}>
-                    <View style={[styles.pointDot, { backgroundColor: point.isActive ? '#2ECC71' : colors.border }]} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]}>{point.name}</Text>
-                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                        {point.address || point.province || 'Chưa có địa chỉ'}
-                        {point.capacity ? ` · ${point.capacity} người` : ''}
-                      </Text>
-                    </View>
-                    {point.lat !== 0 && (
-                      <TouchableOpacity
-                        style={styles.pointNavBtn}
-                        onPress={() => openExternalNav(point.lat, point.lon)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Ionicons name="navigate-outline" size={18} color={colors.primary} />
-                      </TouchableOpacity>
-                    )}
-                    <Switch
-                      value={point.isActive}
-                      onValueChange={() => handleTogglePoint(point)}
-                      trackColor={{ false: colors.border, true: '#2ECC71' }}
-                      thumbColor="#fff"
+          <ScrollView
+            contentContainerStyle={styles.body}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
+            {showAddPoint && (
+              <View style={[styles.formCard, { backgroundColor: colors.card, margin: Spacing.m, marginBottom: 0 }]}>
+                <Text style={[Typography.label, { color: colors.textSecondary }]}>TÊN ĐIỂM</Text>
+                <TextInput
+                  style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
+                  placeholder="VD: Trường THCS Lê Lợi"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newName}
+                  onChangeText={setNewName}
+                />
+                <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>ĐỊA CHỈ</Text>
+                <TextInput
+                  style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
+                  placeholder="Số nhà, đường, phường..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={newAddress}
+                  onChangeText={setNewAddress}
+                />
+                <View style={styles.twoCol}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>SỨC CHỨA</Text>
+                    <TextInput
+                      style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
+                      placeholder="Số người"
+                      placeholderTextColor={colors.textSecondary}
+                      value={newCapacity}
+                      onChangeText={setNewCapacity}
+                      keyboardType="numeric"
                     />
                   </View>
-                ))}
+                  <View style={{ flex: 1, marginLeft: Spacing.m }}>
+                    <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>TỈNH / TP</Text>
+                    <TextInput
+                      style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
+                      placeholder="Tỉnh..."
+                      placeholderTextColor={colors.textSecondary}
+                      value={newProvince}
+                      onChangeText={setNewProvince}
+                    />
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.submitBtn, { backgroundColor: addingPoint ? colors.textSecondary : colors.primary, marginTop: Spacing.m }]}
+                  onPress={handleAddPoint}
+                  disabled={addingPoint}
+                  activeOpacity={0.8}
+                >
+                  {addingPoint
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={[Typography.button, { color: '#fff' }]}>LƯU ĐIỂM</Text>
+                  }
+                </TouchableOpacity>
               </View>
-          }
-        </ScrollView>
+            )}
+
+            {(() => {
+              const q = pointSearch.trim().toLowerCase();
+              const filtered = q
+                ? points.filter((p) =>
+                    p.name.toLowerCase().includes(q) ||
+                    (p.address ?? '').toLowerCase().includes(q) ||
+                    (p.province ?? '').toLowerCase().includes(q)
+                  )
+                : points;
+              if (filtered.length === 0) return (
+                <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl, paddingHorizontal: Spacing.m }]}>
+                  {q ? 'Không tìm thấy điểm phù hợp.' : 'Chưa có điểm sơ tán nào.'}
+                </Text>
+              );
+              return (
+                <View style={styles.listGap}>
+                  {filtered.map((point) => (
+                    <View key={point.id} style={[styles.pointCard, { backgroundColor: colors.card }]}>
+                      <View style={[styles.pointDot, { backgroundColor: point.isActive ? '#2ECC71' : colors.border }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]}>{point.name}</Text>
+                        <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                          {point.address || point.province || 'Chưa có địa chỉ'}
+                          {point.capacity ? ` · ${point.capacity} người` : ''}
+                        </Text>
+                      </View>
+                      {point.lat !== 0 && (
+                        <TouchableOpacity
+                          style={styles.pointNavBtn}
+                          onPress={() => openExternalNav(point.lat, point.lon)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="navigate-outline" size={18} color={colors.primary} />
+                        </TouchableOpacity>
+                      )}
+                      <Switch
+                        value={point.isActive}
+                        onValueChange={() => handleTogglePoint(point)}
+                        trackColor={{ false: colors.border, true: '#2ECC71' }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+          </ScrollView>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -502,8 +537,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  body: { padding: Spacing.m, paddingBottom: Spacing.xxl, gap: Spacing.s },
-  listGap: { gap: Spacing.s },
+  body: { paddingBottom: Spacing.xxl },
+  listGap: {},
+  feedItem: {
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.m,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  feedMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+    marginBottom: Spacing.xs,
+  },
+  statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  feedActions: {
+    flexDirection: 'row',
+    gap: Spacing.l,
+    marginTop: Spacing.s,
+    paddingTop: Spacing.s,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  feedAction: { flexDirection: 'row', alignItems: 'center' },
   card: {
     flexDirection: 'row',
     borderRadius: 12,
@@ -572,4 +627,30 @@ const styles = StyleSheet.create({
   },
   pointDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
   pointNavBtn: { padding: Spacing.xs },
+  photoStrip: { marginBottom: Spacing.xs },
+  photoThumb: { width: 80, height: 80, borderRadius: 8, marginRight: Spacing.s },
+  pointsToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+  },
+  pointSearchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    borderRadius: 10,
+    paddingHorizontal: Spacing.s,
+    gap: Spacing.xs,
+  },
+  pointSearchInput: { flex: 1, fontSize: 14 },
+  pointAddBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

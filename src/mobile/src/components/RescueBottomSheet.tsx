@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Animated,
+  View, Text, TextInput, TouchableOpacity, Animated, Image,
   Dimensions, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { rescueApi, RescuePoint } from '../api/rescue';
@@ -45,6 +47,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
   const [userLoc, setUserLoc] = useState<{ lat: number; lon: number } | null>(null);
   const [shelters, setShelters] = useState<RescuePoint[]>([]);
   const [roadDistances, setRoadDistances] = useState<Record<number, { distKm: number; durationMin: number }>>({});
+  const [photos, setPhotos] = useState<string[]>([]);
 
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
   const pulseAnims = useRef([
@@ -87,6 +90,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
         setPeopleText('1');
         setUserLoc(null);
         setRoadDistances({});
+        setPhotos([]);
         holdProgress.setValue(0);
       });
     }
@@ -176,6 +180,36 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
       .slice(0, 10);
   }, [shelters, userLoc, roadDistances]);
 
+  const handlePickImage = () => {
+    const remaining = 5 - photos.length;
+    if (remaining <= 0) return;
+    Alert.alert('Thêm ảnh', undefined, [
+      {
+        text: 'Chụp ảnh',
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (perm.status !== 'granted') return;
+          const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+          if (!result.canceled) setPhotos((p) => [...p, result.assets[0].uri].slice(0, 5));
+        },
+      },
+      {
+        text: 'Chọn từ thư viện',
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsMultipleSelection: true,
+            selectionLimit: remaining,
+            quality: 0.7,
+          });
+          if (!result.canceled)
+            setPhotos((p) => [...p, ...result.assets.map((a) => a.uri)].slice(0, 5));
+        },
+      },
+      { text: 'Hủy', style: 'cancel' },
+    ]);
+  };
+
   const onPressIn = () => {
     if (submitted) return;
     if (!locationRef.current) {
@@ -192,7 +226,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
       if (finished) {
         setSubmitted(true);
         const { lat, lon } = locationRef.current!;
-        rescueApi.createRequest({ lat, lon, peopleCount, notes: description || undefined })
+        rescueApi.createRequest({ lat, lon, peopleCount, notes: description || undefined, photos })
           .catch(() => {});
       }
     });
@@ -265,12 +299,9 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
           style={{ flex: 1 }}
         >
           {/* Description */}
-          <Text style={[Typography.label, { color: themeColors.textSecondary, marginBottom: Spacing.s }]}>
-            MÔ TẢ TÌNH HUỐNG
-          </Text>
           <TextInput
-            style={[styles.descInput, { color: themeColors.text, borderBottomColor: themeColors.border }]}
-            placeholder="Số người, vị trí cụ thể, tình trạng sức khỏe..."
+            style={[styles.descInput, { color: themeColors.text }]}
+            placeholder="Mô tả tình huống: vị trí, sức khỏe..."
             placeholderTextColor={themeColors.textSecondary}
             value={description}
             onChangeText={setDescription}
@@ -279,105 +310,119 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
             textAlignVertical="top"
           />
 
-          {/* People count stepper */}
-          <Text style={[Typography.label, { color: themeColors.textSecondary, marginBottom: Spacing.s }]}>
-            SỐ NGƯỜI CẦN CỨU HỘ
-          </Text>
-          <View style={styles.stepperRow}>
-            <TouchableOpacity
-              onPress={() => {
-                const n = Math.max(1, peopleCount - 1);
-                setPeopleCount(n);
-                setPeopleText(String(n));
-              }}
-              style={[styles.stepperBtn, { backgroundColor: themeColors.secondary }]}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.stepperBtnText, { color: themeColors.text }]}>−</Text>
-            </TouchableOpacity>
-            <TextInput
-              style={[styles.stepperValue, { color: themeColors.text }]}
-              value={peopleText}
-              onChangeText={(t) => {
-                const clean = t.replace(/\D/g, '');
-                setPeopleText(clean);
-                const n = parseInt(clean, 10);
-                if (!isNaN(n) && n >= 1 && n <= 100) setPeopleCount(n);
-              }}
-              onBlur={() => {
-                const n = Math.max(1, Math.min(100, parseInt(peopleText, 10) || 1));
-                setPeopleCount(n);
-                setPeopleText(String(n));
-              }}
-              keyboardType="numeric"
-              selectTextOnFocus
-              textAlign="center"
-            />
-            <TouchableOpacity
-              onPress={() => {
-                const n = Math.min(100, peopleCount + 1);
-                setPeopleCount(n);
-                setPeopleText(String(n));
-              }}
-              style={[styles.stepperBtn, { backgroundColor: themeColors.secondary }]}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.stepperBtnText, { color: themeColors.text }]}>+</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Image upload */}
-          <TouchableOpacity
-            style={[styles.imageBtn, { backgroundColor: themeColors.secondary }]}
-            activeOpacity={0.7}
-          >
-            <Text style={[Typography.label, { color: themeColors.textSecondary }]}>
-              📷  THÊM ẢNH (TÙY CHỌN)
-            </Text>
-          </TouchableOpacity>
-
-          {/* Evacuation recommendations */}
-          <Text style={[Typography.label, { color: themeColors.textSecondary, marginTop: Spacing.l, marginBottom: Spacing.s }]}>
-            ĐIỂM SƠ TÁN GẦN NHẤT
-          </Text>
-          <View style={{ backgroundColor: themeColors.secondary }}>
-            {sortedShelters.length === 0 ? (
-              <Text style={[Typography.caption, { color: themeColors.textSecondary, padding: Spacing.m }]}>
-                Đang tải điểm sơ tán...
-              </Text>
-            ) : sortedShelters.map((shelter, i, arr) => (
+          {/* People count row */}
+          <View style={[styles.metaRow, { borderTopColor: themeColors.border }]}>
+            <Ionicons name="people-outline" size={18} color={themeColors.textSecondary} />
+            <Text style={[styles.metaLabel, { color: themeColors.text }]}>Số người</Text>
+            <View style={styles.stepperInline}>
               <TouchableOpacity
-                key={shelter.id}
-                style={[
-                  styles.shelterRow,
-                  i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: themeColors.border },
-                ]}
-                onPress={() => { onSelectShelter?.(shelter); onClose(); }}
-                activeOpacity={0.7}
+                style={styles.stepperHit}
+                onPress={() => { const n = Math.max(1, peopleCount - 1); setPeopleCount(n); setPeopleText(String(n)); }}
+                activeOpacity={0.6}
               >
-                <View style={[styles.shelterBadge, { backgroundColor: themeColors.primary }]}>
-                  <Text style={styles.shelterBadgeText}>{i + 1}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[Typography.body2, { color: themeColors.text, fontWeight: '600' }]}>
-                    {shelter.name}
-                  </Text>
-                  <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: 2 }]}>
-                    {[
-                      shelter.address || shelter.province,
-                      shelter.capacity ? `${shelter.capacity} người` : null,
-                      shelter.distKm !== Infinity
-                        ? shelter.isRoad
-                          ? `${fmtDist(shelter.distKm)}${shelter.durationMin ? ` · ${shelter.durationMin} phút` : ''}`
-                          : `~${fmtDist(shelter.distKm)}`
-                        : null,
-                    ].filter(Boolean).join(' · ')}
-                  </Text>
-                </View>
-                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>›</Text>
+                <Text style={[styles.stepperTick, { color: themeColors.primary }]}>−</Text>
               </TouchableOpacity>
-            ))}
+              <TextInput
+                style={[styles.stepperValueInput, { color: themeColors.text }]}
+                value={peopleText}
+                onChangeText={(t) => {
+                  const clean = t.replace(/\D/g, '');
+                  setPeopleText(clean);
+                  const n = parseInt(clean, 10);
+                  if (!isNaN(n) && n >= 1 && n <= 100) setPeopleCount(n);
+                }}
+                onBlur={() => {
+                  const n = Math.max(1, Math.min(100, parseInt(peopleText, 10) || 1));
+                  setPeopleCount(n); setPeopleText(String(n));
+                }}
+                keyboardType="numeric"
+                selectTextOnFocus
+                textAlign="center"
+              />
+              <TouchableOpacity
+                style={styles.stepperHit}
+                onPress={() => { const n = Math.min(100, peopleCount + 1); setPeopleCount(n); setPeopleText(String(n)); }}
+                activeOpacity={0.6}
+              >
+                <Text style={[styles.stepperTick, { color: themeColors.primary }]}>+</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {/* Photos row */}
+          <View style={[styles.metaRow, { borderTopColor: themeColors.border, alignItems: 'flex-start', paddingVertical: Spacing.m }]}>
+            <Ionicons name="camera-outline" size={18} color={themeColors.textSecondary} style={{ marginTop: 2 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.metaLabel, { color: themeColors.text, marginBottom: photos.length > 0 ? Spacing.s : 0 }]}>
+                Ảnh hiện trường
+              </Text>
+              {photos.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.xs }}>
+                  {photos.map((uri, i) => (
+                    <View key={i} style={styles.thumbWrap}>
+                      <Image source={{ uri }} style={styles.thumb} />
+                      <TouchableOpacity
+                        style={styles.thumbRemove}
+                        onPress={() => setPhotos((p) => p.filter((_, j) => j !== i))}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <Ionicons name="close-circle" size={18} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {photos.length < 5 && (
+                    <TouchableOpacity
+                      style={[styles.thumbAdd, { borderColor: themeColors.border }]}
+                      onPress={handlePickImage}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add" size={26} color={themeColors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+              )}
+              {photos.length === 0 && (
+                <TouchableOpacity onPress={handlePickImage} activeOpacity={0.7}>
+                  <Text style={[Typography.body2, { color: themeColors.primary }]}>Thêm ảnh</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Shelter list */}
+          <Text style={[Typography.label, { color: themeColors.textSecondary, marginTop: Spacing.l, marginBottom: 0 }]}>
+            Điểm sơ tán gần nhất
+          </Text>
+          {sortedShelters.length === 0 ? (
+            <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: Spacing.s }]}>
+              Đang tải...
+            </Text>
+          ) : sortedShelters.map((shelter) => (
+            <TouchableOpacity
+              key={shelter.id}
+              style={[styles.shelterRow, { borderTopColor: themeColors.border }]}
+              onPress={() => { onSelectShelter?.(shelter); onClose(); }}
+              activeOpacity={0.7}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[Typography.body2, { color: themeColors.text, fontWeight: '600' }]} numberOfLines={1}>
+                  {shelter.name}
+                </Text>
+                <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: 2 }]}>
+                  {[
+                    shelter.address || shelter.province,
+                    shelter.capacity ? `${shelter.capacity} người` : null,
+                    shelter.distKm !== Infinity
+                      ? shelter.isRoad
+                        ? `${fmtDist(shelter.distKm)}${shelter.durationMin ? ` · ${shelter.durationMin} phút` : ''}`
+                        : `~${fmtDist(shelter.distKm)}`
+                      : null,
+                  ].filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={themeColors.textSecondary} />
+            </TouchableOpacity>
+          ))}
 
         </ScrollView>
 
@@ -419,139 +464,80 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
 const styles = StyleSheet.create({
   sheet: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 0, left: 0, right: 0,
     height: SHEET_HEIGHT,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 24,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    elevation: 20,
   },
   handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: 36, height: 4, borderRadius: 2,
     alignSelf: 'center',
-    marginTop: Spacing.s,
-    marginBottom: Spacing.xs,
+    marginTop: Spacing.s, marginBottom: Spacing.xs,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.l,
-    paddingVertical: Spacing.m,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: Spacing.l, paddingVertical: Spacing.m,
   },
-  pulseWrap: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pulseRing: {
-    position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  sosDot: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sosText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  closeBtn: {
-    padding: Spacing.s,
-  },
-  body: {
-    paddingHorizontal: Spacing.l,
-    paddingBottom: Spacing.m,
-  },
+  pulseWrap: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  pulseRing: { position: 'absolute', width: 48, height: 48, borderRadius: 24 },
+  sosDot: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  sosText: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  closeBtn: { padding: Spacing.s },
+
+  body: { paddingHorizontal: Spacing.l, paddingBottom: Spacing.m },
+
   descInput: {
     fontSize: 15,
-    borderBottomWidth: 1.5,
-    paddingVertical: Spacing.s,
-    marginBottom: Spacing.m,
-    minHeight: 64,
+    paddingVertical: Spacing.m,
+    minHeight: 72,
+    lineHeight: 22,
   },
-  imageBtn: {
-    height: 44,
+
+  // Row-style fields (people count, photos)
+  metaRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.s,
+    paddingVertical: Spacing.s,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.m,
   },
+  metaLabel: { flex: 1, fontSize: 15 },
+
+  // Stepper
+  stepperInline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  stepperHit: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  stepperTick: { fontSize: 24, fontWeight: '300', lineHeight: 28 },
+  stepperValueInput: { fontSize: 16, fontWeight: '600', minWidth: 32, textAlign: 'center' },
+
+  // Photo thumbnails
+  thumbWrap: { marginRight: Spacing.s, position: 'relative' },
+  thumb: { width: 76, height: 76, borderRadius: 8 },
+  thumbRemove: { position: 'absolute', top: -6, right: -6 },
+  thumbAdd: {
+    width: 76, height: 76, borderRadius: 8,
+    borderWidth: 1, alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Shelter rows — flat, divider only
   shelterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.m,
-    paddingHorizontal: Spacing.m,
     paddingVertical: Spacing.m,
+    gap: Spacing.s,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  shelterBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  shelterBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
+
+  // Hold-to-submit
   holdWrap: {
     paddingHorizontal: Spacing.l,
     paddingTop: Spacing.m,
     paddingBottom: Spacing.l,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  holdOuter: {
-    height: 52,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  holdFill: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-  },
-  holdText: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.m,
-    gap: Spacing.m,
-  },
-  stepperBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperBtnText: {
-    fontSize: 20,
-    fontWeight: '600',
-    lineHeight: 24,
-  },
-  stepperValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    minWidth: 32,
-    textAlign: 'center',
-  },
+  holdOuter: { height: 52, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  holdFill: { position: 'absolute', top: 0, left: 0, bottom: 0 },
+  holdText: { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
 });

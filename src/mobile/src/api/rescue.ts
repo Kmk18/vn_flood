@@ -34,8 +34,19 @@ export const rescueApi = {
   getPoints: () =>
     api.get<RescuePoint[]>('/api/rescue/points').then((r) => r.data),
 
-  createRequest: (data: { lat: number; lon: number; peopleCount?: number; notes?: string }) =>
-    api.post<RescueRequest>('/api/rescue/requests', data).then((r) => r.data),
+  createRequest: (data: { lat: number; lon: number; peopleCount?: number; notes?: string; photos?: string[] }) => {
+    const form = new FormData();
+    form.append('lat', String(data.lat));
+    form.append('lon', String(data.lon));
+    if (data.peopleCount != null) form.append('peopleCount', String(data.peopleCount));
+    if (data.notes) form.append('notes', data.notes);
+    (data.photos ?? []).forEach((uri, i) => {
+      form.append('photos', { uri, name: `photo_${i}.jpg`, type: 'image/jpeg' } as any);
+    });
+    return api.post<RescueRequest>('/api/rescue/requests', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data);
+  },
 
   getMyRequests: () =>
     api.get<RescueRequest[]>('/api/rescue/requests/mine').then((r) => r.data),

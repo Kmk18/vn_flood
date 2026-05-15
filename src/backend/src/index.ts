@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import path from 'path';
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import { createRedisClient } from './redisClient';
@@ -18,8 +20,12 @@ import { registerChatRoutes } from './modules/chat/routes';
 const app = express();
 const port = process.env.PORT || 4000;
 
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static(uploadsDir));
 
 app.use((req, _res, next) => {
   // eslint-disable-next-line no-console
