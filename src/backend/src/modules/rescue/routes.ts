@@ -145,6 +145,56 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
     }
   });
 
+  // GET /api/rescue/points/all — all points incl. inactive (admin/responder only)
+  app.get('/api/rescue/points/all', requireAuth, requireAuthority, async (_req: Request, res: Response) => {
+    try {
+      const data = await db.select().from(rescuePoints).orderBy(sql`${rescuePoints.id} desc`);
+      res.json(data);
+    } catch (err) {
+      console.error('[rescue] points:all:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/rescue/points/:id — remove a shelter point (admin only)
+  app.delete('/api/rescue/points/:id', requireAuth, async (req: Request, res: Response) => {
+    if (req.user!.role !== 'admin') { res.status(403).json({ error: 'Admin only' }); return; }
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) { res.status(400).json({ error: 'Invalid id' }); return; }
+    try {
+      const [deleted] = await db.delete(rescuePoints).where(eq(rescuePoints.id, id)).returning();
+      if (!deleted) { res.status(404).json({ error: 'Point not found' }); return; }
+      await redis.del('rescue:points');
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[rescue] point:delete:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // PATCH /api/rescue/requests/:id/status — admin can set any status directly
+  app.patch('/api/rescue/requests/:id/status', requireAuth, async (req: Request, res: Response) => {
+    if (req.user!.role !== 'admin') { res.status(403).json({ error: 'Admin only' }); return; }
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) { res.status(400).json({ error: 'Invalid id' }); return; }
+    const { status } = req.body as { status: string };
+    if (!['open', 'assigned', 'resolved'].includes(status)) {
+      res.status(400).json({ error: 'Invalid status' }); return;
+    }
+    try {
+      const [updated] = await db
+        .update(rescueRequests)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(rescueRequests.id, id))
+        .returning();
+      if (!updated) { res.status(404).json({ error: 'Not found' }); return; }
+      res.json(updated);
+    } catch (err) {
+      console.error('[rescue] request:status:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // POST /api/rescue/points — add a shelter point (admin/responder only)
   app.post('/api/rescue/points', requireAuth, requireAuthority, async (req: Request, res: Response) => {
     const result = createPointSchema.safeParse(req.body);
