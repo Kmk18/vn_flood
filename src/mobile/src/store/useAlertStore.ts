@@ -31,17 +31,29 @@ export const useAlertStore = create<AlertState>((set, get) => ({
 
   fetchAlerts: async () => {
     try {
-      const data = await officialAlertsApi.getAll();
-      set({
-        alerts: data.map((a) => ({
-          id: String(a.id),
-          title: a.title,
-          message: a.message,
-          isUrgent: a.isUrgent,
-          timestamp: a.createdAt,
-          province: a.province,
-        })),
-      });
+      const [alertsResult, readsResult] = await Promise.allSettled([
+        officialAlertsApi.getAll(),
+        officialAlertsApi.getReadIds(),
+      ]);
+
+      if (alertsResult.status === 'fulfilled') {
+        set({
+          alerts: alertsResult.value.map((a) => ({
+            id: String(a.id),
+            title: a.title,
+            message: a.message,
+            isUrgent: a.isUrgent,
+            timestamp: a.createdAt,
+            province: a.province,
+          })),
+        });
+      }
+
+      if (readsResult.status === 'fulfilled') {
+        const serverIds = new Set(readsResult.value.map(String));
+        // Merge: keep any locally-optimistic reads not yet confirmed by server
+        set((state) => ({ readIds: new Set([...state.readIds, ...serverIds]) }));
+      }
     } catch {
       // keep existing data on error
     }
@@ -54,16 +66,25 @@ export const useAlertStore = create<AlertState>((set, get) => ({
 
   removeAlert: (id) => set((state) => ({ alerts: state.alerts.filter((a) => a.id !== id) })),
 
-  markRead: (id) => set((state) => {
-    if (state.readIds.has(id)) return state;
+  markRead: (id) => {
+    const state = get();
+    if (state.readIds.has(id)) return;
     const readIds = new Set(state.readIds);
     readIds.add(id);
-    return { readIds };
-  }),
+    set({ readIds });
+    const numId = parseInt(id, 10);
+    if (!isNaN(numId)) officialAlertsApi.markRead(numId).catch(() => {});
+  },
 
-  markAllRead: () => set((state) => ({
-    readIds: new Set(state.alerts.map((a) => a.id)),
-  })),
+  markAllRead: () => {
+    const state = get();
+    const unread = state.alerts.filter((a) => !state.readIds.has(a.id));
+    set({ readIds: new Set(state.alerts.map((a) => a.id)) });
+    unread.forEach((a) => {
+      const numId = parseInt(a.id, 10);
+      if (!isNaN(numId)) officialAlertsApi.markRead(numId).catch(() => {});
+    });
+  },
 
   connectSSE: () => {
     _sseCleanup?.();

@@ -14,6 +14,8 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useFloodStore } from '../store/useFloodStore';
 import { useAlertStore } from '../store/useAlertStore';
 import { useTheme } from '../theme/useTheme';
+import { useThemeStore } from '../store/useThemeStore';
+import { useLocationStore } from '../store/useLocationStore';
 
 const Stack = createNativeStackNavigator();
 
@@ -24,6 +26,8 @@ export const AppNavigator = () => {
   const connectSSE = useAlertStore((state) => state.connectSSE);
   const disconnectSSE = useAlertStore((state) => state.disconnectSSE);
   const { colors, isDarkMode } = useTheme();
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
+  const hydrateLocation = useLocationStore((s) => s.hydrate);
 
   const navTheme = {
     ...(isDarkMode ? DarkTheme : DefaultTheme),
@@ -38,6 +42,8 @@ export const AppNavigator = () => {
 
   useEffect(() => {
     hydrate();
+    hydrateTheme();
+    hydrateLocation();
     fetchData();
     fetchAlerts();
     connectSSE();

@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, Alert, Switch, ActivityIndicator, KeyboardAvoidingView,
-  Platform, RefreshControl,
+  StyleSheet, Alert, Platform, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useNavigation, useRoute, NavigationProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
-import { officialAlertsApi } from '../api/officialAlerts';
+import { GlobalStyles } from '../theme/globalStyles';
+import { PostAlertForm } from '../components/PostAlertForm';
 import { rescueApi, RescueRequest } from '../api/rescue';
 import { useAlertStore } from '../store/useAlertStore';
 
@@ -56,17 +56,13 @@ function sorted<T extends Record<string, any>>(data: T[], s: Sort): T[] {
 export const AuthorityScreen = () => {
   const { colors } = useTheme();
   const navigation = useNavigation<NavigationProp<any>>();
+  const route = useRoute<any>();
   const fetchAlerts = useAlertStore((s) => s.fetchAlerts);
 
-  const [activeTab, setActiveTab] = useState<AuthTab>('post');
+  const [activeTab, setActiveTab] = useState<AuthTab>(
+    route.params?.initialTab ?? 'post'
+  );
   const [refreshing, setRefreshing] = useState(false);
-
-  // Post alert form
-  const [title, setTitle] = useState('');
-  const [message, setMessage] = useState('');
-  const [alertProvince, setAlertProvince] = useState('');
-  const [isUrgent, setIsUrgent] = useState(false);
-  const [posting, setPosting] = useState(false);
 
   // Rescue requests
   const [requests, setRequests] = useState<RescueRequest[]>([]);
@@ -97,7 +93,7 @@ export const AuthorityScreen = () => {
   );
 
   const loadRequests = useCallback(async () => {
-    try { setRequests(await rescueApi.getAllRequests()); } catch { /* keep */ }
+    try { setRequests(await rescueApi.getAllRequests('all')); } catch { /* keep */ }
   }, []);
 
   useEffect(() => { loadRequests(); }, [loadRequests]);
@@ -106,28 +102,6 @@ export const AuthorityScreen = () => {
     setRefreshing(true);
     await loadRequests();
     setRefreshing(false);
-  };
-
-  const handlePostAlert = async () => {
-    if (!title.trim() || !message.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề và nội dung.');
-      return;
-    }
-    setPosting(true);
-    try {
-      await officialAlertsApi.create({
-        title: title.trim(),
-        message: message.trim(),
-        isUrgent,
-        province: alertProvince.trim() || undefined,
-      });
-      setTitle(''); setMessage(''); setAlertProvince(''); setIsUrgent(false);
-      fetchAlerts();
-      Alert.alert('Đã đăng', 'Thông báo đã được gửi đến người dùng.');
-    } catch {
-      Alert.alert('Lỗi', 'Không thể đăng thông báo. Thử lại.');
-    }
-    setPosting(false);
   };
 
   const handleUpdateStatus = async (id: number, status: 'open' | 'assigned' | 'resolved') => {
@@ -168,13 +142,18 @@ export const AuthorityScreen = () => {
       </View>
 
       {/* Tab bar */}
-      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[GlobalStyles.screenTabBar, { borderBottomColor: colors.border }]}
+        contentContainerStyle={GlobalStyles.screenTabBarContent}
+      >
         {tabs.map((tab) => {
           const active = activeTab === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tab, active && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+              style={[GlobalStyles.screenTab, active && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
               onPress={() => setActiveTab(tab.key)}
             >
               <Text style={[Typography.body2, {
@@ -186,76 +165,11 @@ export const AuthorityScreen = () => {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       {/* ── Post Alert ── */}
       {activeTab === 'post' && (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView
-            contentContainerStyle={styles.body}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-          >
-            <Text style={[Typography.label, { color: colors.textSecondary }]}>TIÊU ĐỀ</Text>
-            <TextInput
-              style={[styles.input, { color: colors.text, borderBottomColor: colors.border }]}
-              placeholder="Tên thông báo..."
-              placeholderTextColor={colors.textSecondary}
-              value={title}
-              onChangeText={setTitle}
-            />
-
-            <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>NỘI DUNG</Text>
-            <TextInput
-              style={[styles.textarea, { color: colors.text, borderBottomColor: colors.border }]}
-              placeholder="Chi tiết thông báo, hướng dẫn sơ tán..."
-              placeholderTextColor={colors.textSecondary}
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-
-            <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>
-              TỈNH / TP (TÙY CHỌN)
-            </Text>
-            <TextInput
-              style={[styles.input, { color: colors.text, borderBottomColor: colors.border }]}
-              placeholder="Để trống nếu áp dụng toàn quốc"
-              placeholderTextColor={colors.textSecondary}
-              value={alertProvince}
-              onChangeText={setAlertProvince}
-            />
-
-            <View style={[styles.urgentRow, { backgroundColor: colors.card }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[Typography.body1, { color: colors.text }]}>Thông báo khẩn cấp</Text>
-                <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                  Hiển thị nổi bật, màu đỏ, ưu tiên cao nhất
-                </Text>
-              </View>
-              <Switch
-                value={isUrgent}
-                onValueChange={setIsUrgent}
-                trackColor={{ false: colors.border, true: colors.danger }}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.submitBtn, { backgroundColor: posting ? colors.textSecondary : colors.primary }]}
-              onPress={handlePostAlert}
-              disabled={posting}
-              activeOpacity={0.8}
-            >
-              {posting
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={[Typography.button, { color: '#fff' }]}>ĐĂNG THÔNG BÁO</Text>
-              }
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
+        <PostAlertForm onSuccess={fetchAlerts} refreshing={refreshing} onRefresh={onRefresh} />
       )}
 
       {/* ── Rescue Requests ── */}
@@ -389,42 +303,6 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: Spacing.xs },
   roleBadge: { paddingHorizontal: Spacing.s, paddingVertical: 3, borderRadius: 6 },
-  tabBar: { flexDirection: 'row', borderBottomWidth: 1, paddingHorizontal: Spacing.m },
-  tab: {
-    paddingVertical: Spacing.m,
-    paddingRight: Spacing.l,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  body: { padding: Spacing.m, paddingBottom: Spacing.xxl, gap: Spacing.s },
-  input: {
-    fontSize: 15,
-    borderBottomWidth: 1.5,
-    paddingVertical: Spacing.s,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.xs,
-  },
-  textarea: {
-    fontSize: 15,
-    borderBottomWidth: 1.5,
-    paddingVertical: Spacing.s,
-    marginTop: Spacing.xs,
-    minHeight: 80,
-  },
-  urgentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.m,
-    borderRadius: 12,
-    marginTop: Spacing.m,
-  },
-  submitBtn: {
-    height: 50,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.l,
-  },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',

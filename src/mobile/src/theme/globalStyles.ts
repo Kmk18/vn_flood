@@ -316,6 +316,21 @@ export const GlobalStyles = StyleSheet.create({
   },
 
   // -------------------------
+  // Shared screen tab bar (AdminScreen, AuthorityScreen)
+  // -------------------------
+  screenTabBar: { borderBottomWidth: 1, flexGrow: 0 },
+  screenTabBarContent: { paddingHorizontal: Spacing.m },
+  screenTab: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: Spacing.xs,
+    paddingVertical: Spacing.m,
+    marginRight: Spacing.l,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+
+  // -------------------------
   // Chatbot Screen
   // -------------------------
   chatMessageBubble: {

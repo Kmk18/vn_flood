@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Image, TouchableOpacity, TextInput,
   StyleSheet, Alert, ActivityIndicator, RefreshControl,
-  Switch, Linking, Platform, KeyboardAvoidingView,
+  Switch, Linking, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -10,7 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { rescueApi, RescuePoint, RescueRequest } from '../api/rescue';
-import { officialAlertsApi } from '../api/officialAlerts';
+import { GlobalStyles } from '../theme/globalStyles';
+import { PostAlertForm } from '../components/PostAlertForm';
 import { API_URL } from '../api/client';
 import { useResponderStore } from '../store/useResponderStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -202,12 +203,6 @@ export const ResponderScreen = () => {
   const [showPointModal, setShowPointModal] = useState(false);
   const [pointSort, togglePointSort] = useSort();
 
-  // Alerts
-  const [alertTitle, setAlertTitle] = useState('');
-  const [alertMessage, setAlertMessage] = useState('');
-  const [alertProvince, setAlertProvince] = useState('');
-  const [isUrgent, setIsUrgent] = useState(false);
-  const [posting, setPosting] = useState(false);
 
   const SortHdr = ({ col, label, s, toggle, style }: {
     col: string; label: string; s: Sort; toggle: (c: string) => void; style?: any;
@@ -292,28 +287,6 @@ export const ResponderScreen = () => {
     } catch { Alert.alert('Lỗi', 'Không thể cập nhật. Thử lại.'); }
   };
 
-  const handlePostAlert = async () => {
-    if (!alertTitle.trim() || !alertMessage.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề và nội dung.');
-      return;
-    }
-    setPosting(true);
-    try {
-      await officialAlertsApi.create({
-        title: alertTitle.trim(),
-        message: alertMessage.trim(),
-        isUrgent,
-        province: alertProvince.trim() || undefined,
-      });
-      setAlertTitle(''); setAlertMessage(''); setAlertProvince(''); setIsUrgent(false);
-      fetchAlerts();
-      Alert.alert('Đã đăng', 'Thông báo đã được gửi đến người dùng.');
-    } catch {
-      Alert.alert('Lỗi', 'Không thể đăng thông báo. Thử lại.');
-    }
-    setPosting(false);
-  };
-
   const filteredPoints = useMemo(() => {
     const q = pointSearch.trim().toLowerCase();
     const base = points.filter((p) => {
@@ -372,15 +345,15 @@ export const ResponderScreen = () => {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[styles.tabBar, { borderBottomColor: colors.border }]}
-        contentContainerStyle={styles.tabBarContent}
+        style={[GlobalStyles.screenTabBar, { borderBottomColor: colors.border }]}
+        contentContainerStyle={GlobalStyles.screenTabBarContent}
       >
         {tabs.map((tab) => {
           const active = activeTab === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tab, active && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+              style={[GlobalStyles.screenTab, active && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
               onPress={() => setActiveTab(tab.key)}
             >
               <Text style={[Typography.body2, {
@@ -590,72 +563,7 @@ export const ResponderScreen = () => {
 
       {/* ── Post Alert ── */}
       {activeTab === 'alerts' && (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView
-            contentContainerStyle={styles.body}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-          >
-            <Text style={[Typography.label, { color: colors.textSecondary }]}>TIÊU ĐỀ</Text>
-            <TextInput
-              style={[styles.alertInput, { color: colors.text, borderBottomColor: colors.border }]}
-              placeholder="Tên thông báo..."
-              placeholderTextColor={colors.textSecondary}
-              value={alertTitle}
-              onChangeText={setAlertTitle}
-            />
-
-            <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>NỘI DUNG</Text>
-            <TextInput
-              style={[styles.alertTextarea, { color: colors.text, borderBottomColor: colors.border }]}
-              placeholder="Chi tiết thông báo, hướng dẫn sơ tán..."
-              placeholderTextColor={colors.textSecondary}
-              value={alertMessage}
-              onChangeText={setAlertMessage}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-
-            <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>
-              TỈNH / TP (TÙY CHỌN)
-            </Text>
-            <TextInput
-              style={[styles.alertInput, { color: colors.text, borderBottomColor: colors.border }]}
-              placeholder="Để trống nếu áp dụng toàn quốc"
-              placeholderTextColor={colors.textSecondary}
-              value={alertProvince}
-              onChangeText={setAlertProvince}
-            />
-
-            <View style={[styles.urgentRow, { backgroundColor: colors.card }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[Typography.body1, { color: colors.text }]}>Thông báo khẩn cấp</Text>
-                <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                  Hiển thị nổi bật, màu đỏ, ưu tiên cao nhất
-                </Text>
-              </View>
-              <Switch
-                value={isUrgent}
-                onValueChange={setIsUrgent}
-                trackColor={{ false: colors.border, true: colors.danger }}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.alertSubmitBtn, { backgroundColor: posting ? colors.textSecondary : colors.primary }]}
-              onPress={handlePostAlert}
-              disabled={posting}
-              activeOpacity={0.8}
-            >
-              {posting
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={[Typography.button, { color: '#fff' }]}>ĐĂNG THÔNG BÁO</Text>
-              }
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
+        <PostAlertForm onSuccess={fetchAlerts} refreshing={refreshing} onRefresh={onRefresh} />
       )}
     </SafeAreaView>
   );
@@ -673,17 +581,6 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: Spacing.xs },
   roleBadge: { paddingHorizontal: Spacing.s, paddingVertical: 3, borderRadius: 6 },
-  tabBar: { borderBottomWidth: 1, flexGrow: 0 },
-  tabBarContent: { paddingHorizontal: Spacing.m },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.m,
-    marginRight: Spacing.l,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-    gap: Spacing.xs,
-  },
   badge: {
     minWidth: 18,
     height: 18,
@@ -781,33 +678,4 @@ const styles = StyleSheet.create({
   ptColName: { flex: 1 },
   ptColCap: { width: 52 },
   ptColStatus: { width: 60 },
-  // Alert form
-  alertInput: {
-    fontSize: 15,
-    borderBottomWidth: 1.5,
-    paddingVertical: Spacing.s,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.xs,
-  },
-  alertTextarea: {
-    fontSize: 15,
-    borderBottomWidth: 1.5,
-    paddingVertical: Spacing.s,
-    marginTop: Spacing.xs,
-    minHeight: 80,
-  },
-  urgentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.m,
-    borderRadius: 12,
-    marginTop: Spacing.m,
-  },
-  alertSubmitBtn: {
-    height: 50,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.l,
-  },
 });

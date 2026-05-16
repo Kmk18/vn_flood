@@ -51,9 +51,10 @@ export const rescueApi = {
   getMyRequests: () =>
     api.get<RescueRequest[]>('/api/rescue/requests/mine').then((r) => r.data),
 
-  // Returns open + assigned (for map overlay)
-  getAllRequests: () =>
-    api.get<RescueRequest[]>('/api/rescue/requests').then((r) => r.data),
+  // Returns open + assigned by default; pass 'all' to include resolved
+  getAllRequests: (status?: string) =>
+    api.get<RescueRequest[]>('/api/rescue/requests', status ? { params: { status } } : undefined)
+      .then((r) => r.data),
 
   // Filter by status for the responder tabs
   getByStatus: (status: 'open' | 'assigned' | 'resolved') =>

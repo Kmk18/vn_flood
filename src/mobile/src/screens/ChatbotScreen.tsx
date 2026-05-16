@@ -1,14 +1,17 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
   TextStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as SecureStore from 'expo-secure-store';
 import { Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useTheme } from '../theme/useTheme';
 import { chatApi } from '../api/chat';
+
+export const CHAT_HISTORY_KEY = 'chat_history';
 
 interface Message {
   id: string;
@@ -90,16 +93,28 @@ const SUGGESTED = [
   'Số điện thoại khẩn cấp là gì?',
 ];
 
+const GREETING: Message = { id: '0', text: 'Xin chào! Tôi là trợ lý VNFlood. Tôi có thể giúp gì cho bạn hôm nay?', isBot: true };
+
 export const ChatbotScreen = () => {
   const { isDarkMode, colors } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
 
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '0', text: 'Xin chào! Tôi là trợ lý VNFlood. Tôi có thể giúp gì cho bạn hôm nay?', isBot: true },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([GREETING]);
   const hasSentMessage = messages.length > 1;
+
+  useEffect(() => {
+    SecureStore.getItemAsync(CHAT_HISTORY_KEY)
+      .then((raw) => { if (raw) setMessages(JSON.parse(raw)); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (messages.length <= 1) return;
+    const toStore = messages.slice(-6);
+    SecureStore.setItemAsync(CHAT_HISTORY_KEY, JSON.stringify(toStore)).catch(() => {});
+  }, [messages]);
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;

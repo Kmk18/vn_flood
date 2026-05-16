@@ -1,36 +1,78 @@
 import { useState, useEffect } from 'react';
-import { Alert } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
-
-// expo-notifications is not supported in Expo Go (SDK 53+).
-// Local push is disabled here; danger-zone alerts still appear in-app via useAlertStore.
-// To re-enable: install expo-notifications in a dev/production build and uncomment the push logic.
+import Constants from 'expo-constants';
+import { api } from '../api/client';
 
 const PREF_KEY = 'push_notifications_enabled';
+
+// Remote push notifications were removed from Expo Go on Android in SDK 53.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+console.log('[push] executionEnvironment:', Constants.executionEnvironment, '| isExpoGo:', isExpoGo);
+
+if (!isExpoGo) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
+
+async function registerPushToken() {
+  if (isExpoGo) return;
+  try {
+    const token = (await Notifications.getExpoPushTokenAsync({
+      projectId: 'b7a33854-6f00-4eab-be9d-158796c4d906',
+    })).data;
+    console.log('[push] token:', token);
+    await api.post('/api/users/push-token', { token });
+    console.log('[push] token registered');
+  } catch (err) {
+    console.warn('[push] registerPushToken failed:', err);
+  }
+}
 
 export function useNotifications() {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
     SecureStore.getItemAsync(PREF_KEY)
-      .then((v) => setEnabled(v === 'true'))
+      .then((v) => {
+        if (v === 'true') {
+          setEnabled(true);
+          registerPushToken();
+        }
+      })
       .catch(() => {});
   }, []);
 
   const toggle = async (val: boolean) => {
-    if (val) {
-      Alert.alert(
-        'Thông báo đẩy',
-        'Tính năng này yêu cầu cài đặt ứng dụng đầy đủ (development build). Cảnh báo trong ứng dụng vẫn hoạt động bình thường.',
-        [{ text: 'OK' }],
-      );
+    if (!val) {
+      setEnabled(false);
+      await SecureStore.setItemAsync(PREF_KEY, 'false');
       return;
     }
-    setEnabled(false);
-    await SecureStore.setItemAsync(PREF_KEY, 'false');
+    if (!isExpoGo) {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') return;
+    }
+    setEnabled(true);
+    await SecureStore.setItemAsync(PREF_KEY, 'true');
+    registerPushToken();
   };
-  
-  const scheduleAlert = async (_title: string, _body: string) => {};
+
+  const scheduleAlert = async (title: string, body: string) => {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, sound: true },
+      trigger: null,
+    });
+  };
 
   return { enabled, toggle, scheduleAlert };
 }

@@ -84,7 +84,7 @@ export const TabNavigator = () => {
             const icons: Record<string, [string, string]> = {
               'Bản đồ':  ['map', 'map-outline'],
               'Cảnh báo': ['warning', 'warning-outline'],
-              'Trợ lý':  ['chatbubbles', 'chatbubbles-outline'],
+              'Trợ lý':  ['paper-plane', 'paper-plane-outline'],
               'Hồ sơ':   ['person', 'person-outline'],
             };
             const [active, inactive] = icons[route.name] ?? ['ellipse', 'ellipse-outline'];

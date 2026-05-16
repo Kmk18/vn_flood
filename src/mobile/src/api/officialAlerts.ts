@@ -20,6 +20,12 @@ export const officialAlertsApi = {
 
   remove: (id: number) =>
     api.delete<{ success: boolean }>(`/api/official-alerts/${id}`).then((r) => r.data),
+
+  getReadIds: () =>
+    api.get<number[]>('/api/official-alerts/reads').then((r) => r.data),
+
+  markRead: (id: number) =>
+    api.post<{ success: boolean }>(`/api/official-alerts/${id}/read`).then((r) => r.data),
 };
 
 type SSEEvent =

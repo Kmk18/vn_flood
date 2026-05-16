@@ -3,11 +3,12 @@ import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal, Switch,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
+import { GlobalStyles } from '../theme/globalStyles';
 import { adminApi, AdminUser, AdminStats } from '../api/admin';
 import { officialAlertsApi, OfficialAlert } from '../api/officialAlerts';
 import { rescueApi, RescuePoint } from '../api/rescue';
@@ -62,13 +63,16 @@ interface UserDetailModalProps {
 }
 
 const UserDetailModal: React.FC<UserDetailModalProps> = ({ user, onClose, onRoleChange, onDelete, colors }) => {
+  const insets = useSafeAreaInsets();
   const [changingRole, setChangingRole] = useState<string | null>(null);
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   if (!user) return null;
 
   const handleRoleChange = (role: string) => {
+    setShowRoleDropdown(false);
     Alert.alert(
       'Xác nhận thay đổi quyền',
-      `Đổi quyền "${user.name || user.email}" từ "${ROLE_LABELS[user.role]}" thành "${ROLE_LABELS[role]}"?`,
+      `Đổi quyền "${user.name || user.email}" sang "${ROLE_LABELS[role]}"?`,
       [
         { text: 'Huỷ', style: 'cancel' },
         {
@@ -86,7 +90,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ user, onClose, onRole
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={[dStyles.root, { backgroundColor: colors.background }]}>
+      <View style={[dStyles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={[dStyles.header, { borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onClose} style={dStyles.closeBtn}>
             <Ionicons name="close" size={24} color={colors.text} />
@@ -128,22 +132,58 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ user, onClose, onRole
           <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.l, marginBottom: Spacing.s }]}>
             ĐỔI QUYỀN
           </Text>
-          <View style={dStyles.roleRow}>
-            {ROLES.filter((r) => r !== user.role).map((role) => (
-              <TouchableOpacity
-                key={role}
-                style={[dStyles.roleBtn, { borderColor: ROLE_COLORS[role] }]}
-                onPress={() => handleRoleChange(role)}
-                disabled={changingRole !== null}
-                activeOpacity={0.8}
-              >
-                {changingRole === role
-                  ? <ActivityIndicator size="small" color={ROLE_COLORS[role]} />
-                  : <Text style={[Typography.button, { color: ROLE_COLORS[role] }]}>{ROLE_LABELS[role].toUpperCase()}</Text>
-                }
-              </TouchableOpacity>
-            ))}
-          </View>
+
+          {/* Role selector */}
+          <TouchableOpacity
+            style={[dStyles.roleSelector, { borderColor: colors.border, backgroundColor: colors.card }]}
+            onPress={() => setShowRoleDropdown((v) => !v)}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.s }}>
+              <View style={[dStyles.roleColorDot, { backgroundColor: ROLE_COLORS[user.role] }]} />
+              <Text style={[Typography.body1, { color: colors.text }]}>{ROLE_LABELS[user.role]}</Text>
+            </View>
+            <Ionicons
+              name={showRoleDropdown ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          {showRoleDropdown && (
+            <View style={[dStyles.roleDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {ROLES.map((role, i) => {
+                const isCurrent = role === user.role;
+                const isChanging = changingRole === role;
+                return (
+                  <React.Fragment key={role}>
+                    {i > 0 && <View style={[dStyles.roleOptionDivider, { backgroundColor: colors.border }]} />}
+                    <TouchableOpacity
+                      style={dStyles.roleOption}
+                      onPress={() => !isCurrent && handleRoleChange(role)}
+                      disabled={isCurrent || changingRole !== null}
+                      activeOpacity={isCurrent ? 1 : 0.7}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.m, flex: 1 }}>
+                        <View style={[dStyles.roleColorDot, { backgroundColor: ROLE_COLORS[role] }]} />
+                        <Text style={[Typography.body1, {
+                          color: isCurrent ? ROLE_COLORS[role] : colors.text,
+                          fontWeight: isCurrent ? '700' : '400',
+                        }]}>
+                          {ROLE_LABELS[role]}
+                        </Text>
+                      </View>
+                      {isChanging
+                        ? <ActivityIndicator size="small" color={ROLE_COLORS[role]} />
+                        : isCurrent
+                          ? <Ionicons name="checkmark" size={18} color={ROLE_COLORS[role]} />
+                          : null}
+                    </TouchableOpacity>
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          )}
 
           <TouchableOpacity
             style={[dStyles.deleteBtn, { borderColor: colors.danger }]}
@@ -172,8 +212,20 @@ const dStyles = StyleSheet.create({
   infoCard: { borderRadius: 12, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.m, paddingVertical: Spacing.m, gap: Spacing.m },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.m },
-  roleRow: { flexDirection: 'row', gap: Spacing.s },
-  roleBtn: { flex: 1, height: 44, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  roleSelector: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.m, paddingVertical: Spacing.m,
+    borderRadius: 10, borderWidth: 1,
+  },
+  roleColorDot: { width: 10, height: 10, borderRadius: 5 },
+  roleDropdown: {
+    borderRadius: 10, borderWidth: 1, overflow: 'hidden', marginTop: Spacing.xs,
+  },
+  roleOption: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: Spacing.m, paddingVertical: Spacing.m,
+  },
+  roleOptionDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.m },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 10, borderWidth: 1.5, marginTop: Spacing.l },
 });
 
@@ -444,15 +496,15 @@ export const AdminScreen = () => {
 
       <ScrollView
         horizontal showsHorizontalScrollIndicator={false}
-        style={[styles.tabBar, { borderBottomColor: colors.border }]}
-        contentContainerStyle={styles.tabBarContent}
+        style={[GlobalStyles.screenTabBar, { borderBottomColor: colors.border }]}
+        contentContainerStyle={GlobalStyles.screenTabBarContent}
       >
         {tabs.map((tab) => {
           const active = activeTab === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tab, active && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+              style={[GlobalStyles.screenTab, active && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
               onPress={() => setActiveTab(tab.key)}
             >
               <Text style={[Typography.body2, {
@@ -776,12 +828,6 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: Spacing.xs },
   roleBadge: { paddingHorizontal: Spacing.s, paddingVertical: 3, borderRadius: 6 },
-  tabBar: { borderBottomWidth: 1, flexGrow: 0 },
-  tabBarContent: { paddingHorizontal: Spacing.m },
-  tab: {
-    paddingVertical: Spacing.m, marginRight: Spacing.l,
-    borderBottomWidth: 2, borderBottomColor: 'transparent',
-  },
   body: { padding: Spacing.m, paddingBottom: Spacing.xxl, gap: Spacing.s },
   // Dashboard
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.s, marginBottom: Spacing.s },

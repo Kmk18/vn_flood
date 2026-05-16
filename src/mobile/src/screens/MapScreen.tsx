@@ -16,7 +16,6 @@ import { useLocationStore } from '../store/useLocationStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useResponderStore } from '../store/useResponderStore';
 import basinPolygons from '../assets/vietnamBasinPolygons';
-import { BasinForecast } from '../mock/floodData';
 import { rescueApi, RescuePoint, RescueRequest } from '../api/rescue';
 import { API_URL } from '../api/client';
 import { useAlertStore } from '../store/useAlertStore';
@@ -85,9 +84,12 @@ const RISK_ORDER: RiskLevel[] = ['low', 'medium', 'high', 'critical'];
 const VIETNAM_REGION = { latitude: 16.0, longitude: 107.5, latitudeDelta: 13.0, longitudeDelta: 9.0 };
 const HAS_POLYGONS = Object.keys(basinPolygons).length > 0;
 
-type Suggestion =
-  | { kind: 'basin';  data: BasinForecast }
-  | { kind: 'rescue'; data: RescuePoint };
+interface GeoResult {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+}
 
 type MapStyleId = 'standard' | 'satellite' | 'hybrid';
 const MAP_STYLES: { id: MapStyleId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -122,6 +124,10 @@ export const MapScreen = () => {
 
   const [searchQuery, setSearchQuery]   = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [placeSuggestions, setPlaceSuggestions] = useState<GeoResult[]>([]);
+  const [searchedLocation, setSearchedLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [mapStyle, setMapStyle]         = useState<MapStyleId>('standard');
 
@@ -155,22 +161,6 @@ export const MapScreen = () => {
     [basins, minOrder],
   );
 
-  const suggestions = useMemo<Suggestion[]>(() => {
-    if (!searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase();
-    const basinHits: Suggestion[] = basins
-      .filter((b) => (b.province?.toLowerCase() ?? '').includes(q))
-      .map((b) => ({ kind: 'basin', data: b }));
-    const rescueHits: Suggestion[] = rescuePoints
-      .filter((p) =>
-        (p.name?.toLowerCase() ?? '').includes(q) ||
-        (p.province?.toLowerCase() ?? '').includes(q) ||
-        (p.address?.toLowerCase() ?? '').includes(q),
-      )
-      .slice(0, 5)
-      .map((p) => ({ kind: 'rescue', data: p }));
-    return [...basinHits, ...rescueHits].slice(0, 12);
-  }, [basins, rescuePoints, searchQuery]);
 
   const basinMap = useMemo(
     () => new Map(basins.map((b) => [String(b.hybasId), b])),
@@ -334,25 +324,35 @@ export const MapScreen = () => {
   }, [userLocation, route]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-  const handleSelectSuggestion = (basin: BasinForecast) => {
-    setSelectedBasin(basin);
-    setSearchQuery(basin.province);
+  const searchGeo = async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setGeoLoading(true);
+    setPlaceSuggestions([]);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1&accept-language=vi&countrycodes=vn`,
+        { headers: { 'User-Agent': 'VNFloodApp/1.0' } },
+      );
+      setPlaceSuggestions(await res.json());
+      setShowSuggestions(true);
+    } catch {}
+    setGeoLoading(false);
+  };
+
+  const handleSelectGeoResult = (r: GeoResult) => {
+    setSearchQuery(r.display_name.split(',')[0]);
     setShowSuggestions(false);
+    const lat = parseFloat(r.lat);
+    const lon = parseFloat(r.lon);
+    setSearchedLocation({ latitude: lat, longitude: lon });
     mapRef.current?.animateToRegion(
-      { latitude: basin.lat, longitude: basin.lon, latitudeDelta: 0.5, longitudeDelta: 0.5 },
+      { latitude: lat, longitude: lon, latitudeDelta: 0.05, longitudeDelta: 0.05 },
       600,
     );
   };
 
-  const handleSelectRescueSuggestion = (point: RescuePoint) => {
-    setSearchQuery(point.name);
-    setShowSuggestions(false);
-    handleSelectRescue(point);
-    mapRef.current?.animateToRegion(
-      { latitude: point.lat, longitude: point.lon, latitudeDelta: 0.05, longitudeDelta: 0.05 },
-      600,
-    );
-  };
+
 
   const handleMyLocation = () => {
     if (!shareLocation) {
@@ -489,6 +489,11 @@ export const MapScreen = () => {
         {/* Rescue request pins (responder/admin only) */}
         {isResponder && showRescueRequests && requestMarkers}
 
+        {/* Search result pin */}
+        {searchedLocation && (
+          <Marker coordinate={searchedLocation} zIndex={50} />
+        )}
+
         {/* Selected evacuation point — default pin marker */}
         {selectedRescue && (
           <Marker
@@ -509,18 +514,37 @@ export const MapScreen = () => {
       {/* ── Search row ── */}
       <View style={GlobalStyles.mapSearchRow}>
         <View style={[GlobalStyles.mapSearchBar, { backgroundColor: themeColors.card }]}>
-          <Text style={[GlobalStyles.mapSearchIcon, { color: themeColors.textSecondary }]}>⌕</Text>
+          {geoLoading
+            ? <ActivityIndicator size="small" color={themeColors.textSecondary} />
+            : <Ionicons name="search-outline" size={18} color={themeColors.textSecondary} />
+          }
           <TextInput
             style={[GlobalStyles.mapSearchInput, { color: themeColors.text }]}
-            placeholder="Tìm kiếm tỉnh thành..."
+            placeholder="Tìm kiếm địa điểm..."
             placeholderTextColor={themeColors.textSecondary}
             value={searchQuery}
-            onChangeText={(t) => { setSearchQuery(t); setShowSuggestions(true); setSelectedBasin(null); }}
-            onFocus={() => setShowSuggestions(true)}
+            onChangeText={(t) => {
+              setSearchQuery(t);
+              if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+              if (!t) { setShowSuggestions(false); setPlaceSuggestions([]); setSearchedLocation(null); return; }
+              searchDebounceRef.current = setTimeout(async () => {
+                setGeoLoading(true);
+                try {
+                  const res = await fetch(
+                    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(t)}&format=json&limit=5&addressdetails=1&accept-language=vi&countrycodes=vn`,
+                    { headers: { 'User-Agent': 'VNFloodApp/1.0' } },
+                  );
+                  setPlaceSuggestions(await res.json());
+                  setShowSuggestions(true);
+                } catch {}
+                setGeoLoading(false);
+              }, 200);
+            }}
+            onSubmitEditing={searchGeo}
             returnKeyType="search"
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => { setSearchQuery(''); setShowSuggestions(false); }}>
+          {searchQuery.length > 0 && !geoLoading && (
+            <TouchableOpacity onPress={() => { setSearchQuery(''); setShowSuggestions(false); setPlaceSuggestions([]); setSearchedLocation(null); }}>
               <Text style={[GlobalStyles.mapClearBtn, { color: themeColors.textSecondary }]}>✕</Text>
             </TouchableOpacity>
           )}
@@ -538,39 +562,22 @@ export const MapScreen = () => {
       </View>
 
       {/* ── Search suggestions ── */}
-      {showSuggestions && suggestions.length > 0 && (
+      {showSuggestions && placeSuggestions.length > 0 && (
         <View style={[GlobalStyles.mapSuggestions, { backgroundColor: themeColors.card }]}>
-          {suggestions.map((s, i) => (
+          {placeSuggestions.map((r, i) => (
             <TouchableOpacity
-              key={s.kind === 'basin' ? `b-${s.data.hybasId}` : `r-${s.data.id}`}
+              key={r.place_id}
               style={[
                 GlobalStyles.mapSuggestionRow,
                 { borderBottomColor: themeColors.border },
-                i === suggestions.length - 1 && { borderBottomWidth: 0 },
+                i === placeSuggestions.length - 1 && { borderBottomWidth: 0 },
               ]}
-              onPress={() =>
-                s.kind === 'basin'
-                  ? handleSelectSuggestion(s.data)
-                  : handleSelectRescueSuggestion(s.data)
-              }
+              onPress={() => handleSelectGeoResult(r)}
             >
-              {s.kind === 'basin' ? (
-                <View style={[GlobalStyles.mapSuggestionDot, { backgroundColor: RISK_COLORS[s.data.riskLevel] }]} />
-              ) : (
-                <View style={[styles.suggestionRescueIcon]}>
-                  <Ionicons name="medkit" size={10} color="#fff" />
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={[Typography.body1, { color: themeColors.text }]}>
-                  {s.kind === 'basin' ? s.data.province : s.data.name}
-                </Text>
-                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
-                  {s.kind === 'basin'
-                    ? `${RISK_LABELS[s.data.riskLevel]} · ${(s.data.floodProb * 100).toFixed(0)}% xác suất lũ`
-                    : `Điểm cứu hộ · ${s.data.province}`}
-                </Text>
-              </View>
+              <Ionicons name="location-outline" size={16} color={themeColors.textSecondary} style={{ flexShrink: 0 }} />
+              <Text style={[Typography.body1, { color: themeColors.text, flex: 1 }]} numberOfLines={2}>
+                {r.display_name}
+              </Text>
               <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>›</Text>
             </TouchableOpacity>
           ))}
@@ -882,6 +889,17 @@ export const MapScreen = () => {
               ))}
             </ScrollView>
           )}
+          <TouchableOpacity
+            style={[styles.reqCardBtn, { backgroundColor: themeColors.primary }]}
+            onPress={() => {
+              setSelectedRequest(null);
+              (navigation as any).navigate('Authority', { initialTab: 'requests' });
+            }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="list-outline" size={14} color="#fff" />
+            <Text style={styles.reqCardBtnText}>Điều phối</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -909,15 +927,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
     zIndex: 20,
-  },
-  suggestionRescueIcon: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#22c55e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   rescueMarker: {
     width: 28,
@@ -1018,6 +1027,11 @@ const styles = StyleSheet.create({
   },
   statusDotReq: { width: 8, height: 8, borderRadius: 4 },
   reqCardPhoto: { width: 80, height: 80, borderRadius: 8, marginRight: Spacing.s },
+  reqCardBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 4, height: 32, borderRadius: 8, marginTop: Spacing.s,
+  },
+  reqCardBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
   selectedRescueMarker: {
     width: 40,
     height: 40,

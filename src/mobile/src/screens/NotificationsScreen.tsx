@@ -56,6 +56,7 @@ export const NotificationsScreen = () => {
         onPress={() => handlePress(item, canExpand)}
         activeOpacity={0.85}
       >
+        {isUnread && !item.isUrgent && <View style={[styles.accent, { backgroundColor: colors.primary }]} />}
         {item.isUrgent && <View style={[styles.accent, { backgroundColor: colors.danger }]} />}
         <View style={styles.cardInner}>
           <View style={styles.cardHeader}>
@@ -65,7 +66,11 @@ export const NotificationsScreen = () => {
                 <Text style={[Typography.label, { color: colors.danger }]}>KHẨN</Text>
               )}
               <Text
-                style={[Typography.h3, { color: item.isUrgent ? colors.danger : colors.text, flex: 1 }]}
+                style={[Typography.h3, {
+                  color: item.isUrgent ? colors.danger : colors.text,
+                  fontWeight: isUnread ? '700' : '600',
+                  flex: 1,
+                }]}
                 numberOfLines={open ? undefined : 1}
               >
                 {item.title}
