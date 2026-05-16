@@ -67,15 +67,26 @@ export const rescueApi = {
   resolve: (id: number) =>
     api.patch<RescueRequest>(`/api/rescue/requests/${id}/resolve`).then((r) => r.data),
 
+  getAllPoints: async () => {
+    try {
+      return await api.get<RescuePoint[]>('/api/rescue/points/all').then((r) => r.data);
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        return api.get<RescuePoint[]>('/api/rescue/points').then((r) => r.data);
+      }
+      throw err;
+    }
+  },
+
   createPoint: (data: { name: string; lat: number; lon: number; capacity?: number; province?: string; address?: string }) =>
     api.post<RescuePoint>('/api/rescue/points', data).then((r) => r.data),
 
   updatePoint: (id: number, data: Partial<RescuePoint>) =>
     api.patch<RescuePoint>(`/api/rescue/points/${id}`, data).then((r) => r.data),
 
-  // kept for AuthorityScreen compat
-  updateStatus: (id: number, status: 'open' | 'assigned' | 'resolved') =>
-    status === 'resolved'
-      ? api.patch<RescueRequest>(`/api/rescue/requests/${id}/resolve`).then((r) => r.data)
-      : api.patch<RescueRequest>(`/api/rescue/requests/${id}/assign`).then((r) => r.data),
+  deletePoint: (id: number) =>
+    api.delete<{ success: boolean }>(`/api/rescue/points/${id}`).then((r) => r.data),
+
+  setRequestStatus: (id: number, status: 'open' | 'assigned' | 'resolved') =>
+    api.patch<RescueRequest>(`/api/rescue/requests/${id}/status`, { status }).then((r) => r.data),
 };

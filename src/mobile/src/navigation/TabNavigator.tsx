@@ -31,11 +31,16 @@ const SOSButton = ({ onPress, color }: { onPress: () => void; color: string }) =
   </View>
 );
 
+const formatBadge = (n: number) => (n >= 10 ? '9+' : n);
+
 export const TabNavigator = () => {
   const { colors } = useTheme();
   const [rescueOpen, setRescueOpen] = useState(false);
   const fetchData = useFloodStore((s) => s.fetchData);
   const fetchAlerts = useAlertStore((s) => s.fetchAlerts);
+  const alertList = useAlertStore((s) => s.alerts);
+  const readIds = useAlertStore((s) => s.readIds);
+  const unreadCount = alertList.filter((a) => !readIds.has(a.id)).length;
   const { shareLocation } = useLocationStore();
   const { setPendingNav } = useResponderStore();
   const navigation = useNavigation<any>();
@@ -88,7 +93,11 @@ export const TabNavigator = () => {
         })}
       >
         <Tab.Screen name="Bản đồ" component={MapScreen} />
-        <Tab.Screen name="Cảnh báo" component={NotificationsScreen} />
+        <Tab.Screen
+          name="Cảnh báo"
+          component={NotificationsScreen}
+          options={{ tabBarBadge: unreadCount > 0 ? formatBadge(unreadCount) : undefined }}
+        />
 
         <Tab.Screen
           name="SOS"
@@ -122,7 +131,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingBottom: 6,
+    paddingBottom: 4,
   },
   sosBtn: {
     width: 56,
@@ -130,7 +139,6 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
     shadowColor: '#C8171A',
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 8,

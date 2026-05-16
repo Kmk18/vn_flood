@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "VNFlood",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -28,7 +28,13 @@
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
-      ]
+      ],
+      "package": "kieuminh.vnflood",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCOcuhQxy61dn9n0QTx916TBy7CD7byJ7o"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -41,6 +47,11 @@
           "locationWhenInUsePermission": "VNFlood cần vị trí của bạn để hiển thị bản đồ lũ gần bạn và chỉ đường đến điểm cứu hộ."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b7a33854-6f00-4eab-be9d-158796c4d906"
+      }
+    }
   }
 }

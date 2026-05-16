@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal,
+  StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal, Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -10,23 +10,46 @@ import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { adminApi, AdminUser, AdminStats } from '../api/admin';
 import { officialAlertsApi, OfficialAlert } from '../api/officialAlerts';
+import { rescueApi, RescuePoint } from '../api/rescue';
 import { useAlertStore } from '../store/useAlertStore';
+import { PointFormModal } from '../components/PointFormModal';
 
-type AdminTab = 'dashboard' | 'users' | 'alerts';
+type AdminTab = 'dashboard' | 'users' | 'alerts' | 'points';
+type Sort = { col: string; dir: 'asc' | 'desc' } | null;
 
 const ROLE_COLORS: Record<string, string> = {
-  admin: '#8E44AD',
-  responder: '#F39C12',
-  user: '#5C6470',
+  admin: '#8E44AD', responder: '#F39C12', user: '#5C6470',
 };
-
 const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin',
-  responder: 'Cứu hộ',
-  user: 'Người dùng',
+  admin: 'Admin', responder: 'Cứu hộ', user: 'Người dùng',
 };
-
 const ROLES = ['user', 'responder', 'admin'] as const;
+
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function sorted<T extends Record<string, any>>(data: T[], s: Sort): T[] {
+  if (!s) return data;
+  return [...data].sort((a, b) => {
+    const av = a[s.col] ?? '';
+    const bv = b[s.col] ?? '';
+    const cmp = typeof av === 'number' && typeof bv === 'number'
+      ? av - bv
+      : String(av).localeCompare(String(bv), 'vi');
+    return s.dir === 'asc' ? cmp : -cmp;
+  });
+}
+
+function useSort(): [Sort, (col: string) => void] {
+  const [s, setS] = useState<Sort>(null);
+  const toggle = (col: string) =>
+    setS((prev) =>
+      prev?.col === col
+        ? prev.dir === 'asc' ? { col, dir: 'desc' } : null
+        : { col, dir: 'asc' }
+    );
+  return [s, toggle];
+}
 
 // ── User Detail Modal ─────────────────────────────────────────────────────────
 
@@ -40,13 +63,12 @@ interface UserDetailModalProps {
 
 const UserDetailModal: React.FC<UserDetailModalProps> = ({ user, onClose, onRoleChange, onDelete, colors }) => {
   const [changingRole, setChangingRole] = useState<string | null>(null);
-
   if (!user) return null;
 
   const handleRoleChange = (role: string) => {
     Alert.alert(
       'Xác nhận thay đổi quyền',
-      `Đổi quyền của ${user.name || user.email} từ "${ROLE_LABELS[user.role]}" thành "${ROLE_LABELS[role]}"?`,
+      `Đổi quyền "${user.name || user.email}" từ "${ROLE_LABELS[user.role]}" thành "${ROLE_LABELS[role]}"?`,
       [
         { text: 'Huỷ', style: 'cancel' },
         {
@@ -64,60 +86,53 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ user, onClose, onRole
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={[detailStyles.root, { backgroundColor: colors.background }]}>
-        {/* Header */}
-        <View style={[detailStyles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={onClose} style={detailStyles.closeBtn}>
+      <View style={[dStyles.root, { backgroundColor: colors.background }]}>
+        <View style={[dStyles.header, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={onClose} style={dStyles.closeBtn}>
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[Typography.h3, { color: colors.text }]}>Chi tiết người dùng</Text>
           <View style={{ width: 32 }} />
         </View>
-
-        <ScrollView contentContainerStyle={detailStyles.body} showsVerticalScrollIndicator={false}>
-          {/* Avatar */}
-          <View style={detailStyles.avatarWrap}>
-            <View style={[detailStyles.avatarLarge, { backgroundColor: ROLE_COLORS[user.role] + '22' }]}>
+        <ScrollView contentContainerStyle={dStyles.body} showsVerticalScrollIndicator={false}>
+          <View style={dStyles.avatarWrap}>
+            <View style={[dStyles.avatarLarge, { backgroundColor: ROLE_COLORS[user.role] + '22' }]}>
               <Text style={[Typography.h1, { color: ROLE_COLORS[user.role] }]}>
                 {(user.name || user.email)[0].toUpperCase()}
               </Text>
             </View>
-            <View style={[detailStyles.roleBadgeLarge, { backgroundColor: ROLE_COLORS[user.role] + '22' }]}>
-              <Text style={[Typography.label, { color: ROLE_COLORS[user.role] }]}>
-                {ROLE_LABELS[user.role]}
-              </Text>
-            </View>
+            <Text style={[Typography.body2, { color: ROLE_COLORS[user.role], fontWeight: '700' }]}>
+              {ROLE_LABELS[user.role]}
+            </Text>
           </View>
 
-          {/* Info card */}
           <Text style={[Typography.label, { color: colors.textSecondary, marginBottom: Spacing.s }]}>THÔNG TIN</Text>
-          <View style={[detailStyles.infoCard, { backgroundColor: colors.card }]}>
+          <View style={[dStyles.infoCard, { backgroundColor: colors.card }]}>
             {[
               { label: 'TÊN', value: user.name || '(Chưa đặt tên)' },
               { label: 'EMAIL', value: user.email },
               { label: 'TỈNH / TP', value: user.province || 'Chưa cập nhật' },
-              { label: 'NGÀY TẠO', value: new Date(user.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) },
+              { label: 'NGÀY TẠO', value: new Date(user.createdAt).toLocaleDateString('vi-VN') },
               { label: 'ID', value: `#${user.id}` },
             ].map((row, i, arr) => (
               <React.Fragment key={row.label}>
-                <View style={detailStyles.infoRow}>
+                <View style={dStyles.infoRow}>
                   <Text style={[Typography.label, { color: colors.textSecondary, width: 90 }]}>{row.label}</Text>
                   <Text style={[Typography.body2, { color: colors.text, flex: 1 }]} numberOfLines={1}>{row.value}</Text>
                 </View>
-                {i < arr.length - 1 && <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />}
+                {i < arr.length - 1 && <View style={[dStyles.divider, { backgroundColor: colors.border }]} />}
               </React.Fragment>
             ))}
           </View>
 
-          {/* Role change */}
           <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.l, marginBottom: Spacing.s }]}>
             ĐỔI QUYỀN
           </Text>
-          <View style={detailStyles.roleRow}>
+          <View style={dStyles.roleRow}>
             {ROLES.filter((r) => r !== user.role).map((role) => (
               <TouchableOpacity
                 key={role}
-                style={[detailStyles.roleBtn, { borderColor: ROLE_COLORS[role], backgroundColor: ROLE_COLORS[role] + '12' }]}
+                style={[dStyles.roleBtn, { borderColor: ROLE_COLORS[role] }]}
                 onPress={() => handleRoleChange(role)}
                 disabled={changingRole !== null}
                 activeOpacity={0.8}
@@ -130,9 +145,8 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ user, onClose, onRole
             ))}
           </View>
 
-          {/* Delete */}
           <TouchableOpacity
-            style={[detailStyles.deleteBtn, { borderColor: colors.danger }]}
+            style={[dStyles.deleteBtn, { borderColor: colors.danger }]}
             onPress={() => onDelete(user)}
             activeOpacity={0.8}
           >
@@ -145,66 +159,22 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ user, onClose, onRole
   );
 };
 
-const detailStyles = StyleSheet.create({
+const dStyles = StyleSheet.create({
   root: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.m,
-    paddingVertical: Spacing.m,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.m, paddingVertical: Spacing.m, borderBottomWidth: StyleSheet.hairlineWidth,
   },
   closeBtn: { padding: Spacing.xs },
   body: { padding: Spacing.l, paddingBottom: Spacing.xxl, gap: Spacing.xs },
-  avatarWrap: { alignItems: 'center', marginBottom: Spacing.l, gap: Spacing.m },
-  avatarLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleBadgeLarge: {
-    paddingHorizontal: Spacing.m,
-    paddingVertical: Spacing.xs,
-    borderRadius: 8,
-  },
-  infoCard: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.m,
-    paddingVertical: Spacing.m,
-    gap: Spacing.m,
-  },
+  avatarWrap: { alignItems: 'center', marginBottom: Spacing.l, gap: Spacing.s },
+  avatarLarge: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  infoCard: { borderRadius: 12, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.m, paddingVertical: Spacing.m, gap: Spacing.m },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.m },
   roleRow: { flexDirection: 'row', gap: Spacing.s },
-  roleBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    marginTop: Spacing.l,
-  },
+  roleBtn: { flex: 1, height: 44, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 10, borderWidth: 1.5, marginTop: Spacing.l },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -216,72 +186,90 @@ export const AdminScreen = () => {
 
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [officialAlerts, setOfficialAlerts] = useState<OfficialAlert[]>([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+
+  // Users
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [userSort, toggleUserSort] = useSort();
+  const [showUserFilter, setShowUserFilter] = useState(false);
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [userProvinceFilter, setUserProvinceFilter] = useState('');
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Alerts
+  const [alerts, setAlerts] = useState<OfficialAlert[]>([]);
+  const [alertSearch, setAlertSearch] = useState('');
+  const [alertSort, toggleAlertSort] = useSort();
+  const [showAlertFilter, setShowAlertFilter] = useState(false);
+  const [alertUrgency, setAlertUrgency] = useState('all');
+  const [alertProvince, setAlertProvince] = useState('');
+
+  // Points
+  const [points, setPoints] = useState<RescuePoint[]>([]);
+  const [pointSearch, setPointSearch] = useState('');
+  const [pointSort, togglePointSort] = useSort();
+  const [showPointFilter, setShowPointFilter] = useState(false);
+  const [pointStatus, setPointStatus] = useState('all');
+  const [pointProvince, setPointProvince] = useState('');
+  const [showPointModal, setShowPointModal] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     try { setStats(await adminApi.getStats()); } catch { /* show empty */ }
   }, []);
 
-  const loadUsers = useCallback(async (q = search) => {
-    setLoading(true);
+  const loadUsers = useCallback(async (q = userSearch) => {
+    setLoadingUsers(true);
     try { setUsers(await adminApi.getUsers(q || undefined)); } catch { /* keep */ }
-    setLoading(false);
-  }, [search]);
+    setLoadingUsers(false);
+  }, [userSearch]);
 
   const loadAlerts = useCallback(async () => {
-    try { setOfficialAlerts(await officialAlertsApi.getAll()); } catch { /* keep */ }
+    try { setAlerts(await officialAlertsApi.getAll()); } catch { /* keep */ }
+  }, []);
+
+  const loadPoints = useCallback(async () => {
+    try { setPoints(await rescueApi.getAllPoints()); } catch { /* keep */ }
   }, []);
 
   useEffect(() => {
-    loadDashboard();
-    loadUsers('');
-    loadAlerts();
+    loadDashboard(); loadUsers(''); loadAlerts(); loadPoints();
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => loadUsers(search), 300);
+    const t = setTimeout(() => loadUsers(userSearch), 300);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [userSearch]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([loadDashboard(), loadUsers(search), loadAlerts()]);
+    await Promise.all([loadDashboard(), loadUsers(userSearch), loadAlerts(), loadPoints()]);
     setRefreshing(false);
   };
+
+  // ── CRUD handlers ────────────────────────────────────────────────────────────
 
   const handleRoleChange = async (user: AdminUser, role: string) => {
     try {
       await adminApi.updateRole(user.id, role as any);
       setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, role } : u));
-    } catch {
-      Alert.alert('Lỗi', 'Không thể cập nhật quyền. Thử lại.');
-    }
+    } catch { Alert.alert('Lỗi', 'Không thể cập nhật quyền.'); }
   };
 
-  const handleDelete = (user: AdminUser) => {
-    Alert.alert(
-      'Xoá tài khoản',
-      `Bạn có chắc muốn xoá tài khoản "${user.email}"? Hành động này không thể hoàn tác.`,
-      [
-        { text: 'Huỷ', style: 'cancel' },
-        {
-          text: 'Xoá', style: 'destructive', onPress: async () => {
-            try {
-              await adminApi.deleteUser(user.id);
-              setUsers((prev) => prev.filter((u) => u.id !== user.id));
-              setSelectedUser(null);
-            } catch {
-              Alert.alert('Lỗi', 'Không thể xoá. Thử lại.');
-            }
-          },
+  const handleDeleteUser = (user: AdminUser) => {
+    Alert.alert('Xoá tài khoản', `Xoá "${user.email}"? Không thể hoàn tác.`, [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Xoá', style: 'destructive', onPress: async () => {
+          try {
+            await adminApi.deleteUser(user.id);
+            setUsers((prev) => prev.filter((u) => u.id !== user.id));
+            setSelectedUser(null);
+          } catch { Alert.alert('Lỗi', 'Không thể xoá.'); }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleDeleteAlert = (id: number) => {
@@ -291,21 +279,139 @@ export const AdminScreen = () => {
         text: 'Xoá', style: 'destructive', onPress: async () => {
           try {
             await officialAlertsApi.remove(id);
-            setOfficialAlerts((prev) => prev.filter((a) => a.id !== id));
+            setAlerts((prev) => prev.filter((a) => a.id !== id));
             fetchAlerts();
-          } catch {
-            Alert.alert('Lỗi', 'Không thể xoá. Thử lại.');
-          }
+          } catch { Alert.alert('Lỗi', 'Không thể xoá.'); }
         },
       },
     ]);
   };
 
-  const tabs: { key: AdminTab; label: string }[] = [
-    { key: 'dashboard', label: 'Tổng quan' },
-    { key: 'users', label: 'Người dùng' },
-    { key: 'alerts', label: 'Thông báo' },
-  ];
+  const handleAddPoint = async (data: any) => {
+    const point = await rescueApi.createPoint(data);
+    setPoints((prev) => [point, ...prev]);
+    setShowPointModal(false);
+  };
+
+  const handleTogglePoint = async (point: RescuePoint) => {
+    try {
+      const updated = await rescueApi.updatePoint(point.id, { isActive: !point.isActive });
+      setPoints((prev) => prev.map((p) => p.id === point.id ? updated : p));
+    } catch { Alert.alert('Lỗi', 'Không thể cập nhật.'); }
+  };
+
+  const handleDeletePoint = (id: number) => {
+    Alert.alert('Xoá điểm', 'Xoá điểm sơ tán này?', [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Xoá', style: 'destructive', onPress: async () => {
+          try {
+            await rescueApi.deletePoint(id);
+            setPoints((prev) => prev.filter((p) => p.id !== id));
+          } catch { Alert.alert('Lỗi', 'Không thể xoá.'); }
+        },
+      },
+    ]);
+  };
+
+  // ── Filtered + sorted data ───────────────────────────────────────────────────
+
+  const filteredUsers = useMemo(() => {
+    let d = users;
+    if (userRoleFilter !== 'all') d = d.filter((u) => u.role === userRoleFilter);
+    if (userProvinceFilter.trim()) {
+      const q = userProvinceFilter.toLowerCase();
+      d = d.filter((u) => (u.province ?? '').toLowerCase().includes(q));
+    }
+    return sorted(d, userSort);
+  }, [users, userRoleFilter, userProvinceFilter, userSort]);
+
+  const filteredAlerts = useMemo(() => {
+    let d = alerts;
+    if (alertUrgency === 'urgent') d = d.filter((a) => a.isUrgent);
+    if (alertUrgency === 'normal') d = d.filter((a) => !a.isUrgent);
+    if (alertProvince.trim()) {
+      const q = alertProvince.toLowerCase();
+      d = d.filter((a) => (a.province ?? '').toLowerCase().includes(q));
+    }
+    if (alertSearch.trim()) {
+      const q = alertSearch.toLowerCase();
+      d = d.filter((a) => a.title.toLowerCase().includes(q) || a.message.toLowerCase().includes(q));
+    }
+    return sorted(d, alertSort);
+  }, [alerts, alertUrgency, alertProvince, alertSearch, alertSort]);
+
+  const filteredPoints = useMemo(() => {
+    let d = points;
+    if (pointStatus === 'active') d = d.filter((p) => p.isActive);
+    if (pointStatus === 'inactive') d = d.filter((p) => !p.isActive);
+    if (pointProvince.trim()) {
+      const q = pointProvince.toLowerCase();
+      d = d.filter((p) => (p.province ?? '').toLowerCase().includes(q));
+    }
+    if (pointSearch.trim()) {
+      const q = pointSearch.toLowerCase();
+      d = d.filter((p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.address ?? '').toLowerCase().includes(q) ||
+        (p.province ?? '').toLowerCase().includes(q)
+      );
+    }
+    return sorted(d, pointSort);
+  }, [points, pointStatus, pointProvince, pointSearch, pointSort]);
+
+  // ── Sub-components ───────────────────────────────────────────────────────────
+
+  const SortHdr = ({ col, label, s, toggle }: { col: string; label: string; s: Sort; toggle: (c: string) => void }) => (
+    <TouchableOpacity style={styles.sortHdr} onPress={() => toggle(col)}>
+      <Text style={[Typography.label, { color: s?.col === col ? colors.primary : colors.textSecondary }]}>
+        {label}
+      </Text>
+      <Ionicons
+        name={s?.col !== col ? 'swap-vertical-outline' : s.dir === 'asc' ? 'arrow-up' : 'arrow-down'}
+        size={10}
+        color={s?.col === col ? colors.primary : colors.textSecondary}
+      />
+    </TouchableOpacity>
+  );
+
+  const Toolbar = ({
+    search, onSearch, placeholder,
+    showFilter, onToggleFilter, onAdd,
+  }: {
+    search: string; onSearch: (v: string) => void; placeholder: string;
+    showFilter: boolean; onToggleFilter: () => void; onAdd?: () => void;
+  }) => (
+    <View style={[styles.toolbar, { borderBottomColor: colors.border }]}>
+      <View style={[styles.searchBar, { backgroundColor: colors.secondary }]}>
+        <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.text }]}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textSecondary}
+          value={search}
+          onChangeText={onSearch}
+          autoCapitalize="none"
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => onSearch('')}>
+            <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+      <TouchableOpacity
+        style={[styles.iconBtn, { backgroundColor: showFilter ? colors.primary + '22' : 'transparent' }]}
+        onPress={onToggleFilter}
+      >
+        <Ionicons name="options-outline" size={20} color={showFilter ? colors.primary : colors.textSecondary} />
+      </TouchableOpacity>
+      {onAdd && (
+        <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.primary }]} onPress={onAdd}>
+          <Ionicons name="add" size={20} color="#fff" />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
   const StatCard = ({ icon, label, value, color }: { icon: string; label: string; value: number | null; color: string }) => (
     <View style={[styles.statCard, { backgroundColor: colors.card }]}>
@@ -316,6 +422,13 @@ export const AdminScreen = () => {
       <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>{label}</Text>
     </View>
   );
+
+  const tabs: { key: AdminTab; label: string }[] = [
+    { key: 'dashboard', label: 'Tổng quan' },
+    { key: 'users', label: 'Người dùng' },
+    { key: 'alerts', label: 'Thông báo' },
+    { key: 'points', label: 'Điểm sơ tán' },
+  ];
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}>
@@ -329,7 +442,11 @@ export const AdminScreen = () => {
         </View>
       </View>
 
-      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
+      <ScrollView
+        horizontal showsHorizontalScrollIndicator={false}
+        style={[styles.tabBar, { borderBottomColor: colors.border }]}
+        contentContainerStyle={styles.tabBarContent}
+      >
         {tabs.map((tab) => {
           const active = activeTab === tab.key;
           return (
@@ -338,176 +455,312 @@ export const AdminScreen = () => {
               style={[styles.tab, active && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
               onPress={() => setActiveTab(tab.key)}
             >
-              <Text style={[Typography.body2, { color: active ? colors.primary : colors.textSecondary, fontWeight: active ? '700' : '400' }]}>
+              <Text style={[Typography.body2, {
+                color: active ? colors.primary : colors.textSecondary,
+                fontWeight: active ? '700' : '400',
+              }]}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-      >
-        {/* ── Dashboard ── */}
-        {activeTab === 'dashboard' && (
-          <>
-            <View style={styles.statGrid}>
-              <StatCard icon="people" label="Người dùng" value={stats?.totalUsers ?? null} color={colors.primary} />
-              <StatCard icon="alert-circle" label="Yêu cầu cứu hộ" value={stats?.activeRescueRequests ?? null} color={colors.danger} />
-              <StatCard icon="analytics" label="Dự báo hôm nay" value={stats?.predictionsToday ?? null} color="#2ECC71" />
-              <StatCard icon="notifications" label="Thông báo" value={stats?.activeAlerts ?? null} color="#F39C12" />
-            </View>
-
-            <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.s }]}>THAO TÁC NHANH</Text>
-            <View style={[styles.card, { backgroundColor: colors.card }]}>
-              <TouchableOpacity style={styles.actionRow} onPress={() => navigation.navigate('Authority')} activeOpacity={0.7}>
-                <Ionicons name="megaphone-outline" size={20} color={colors.primary} />
-                <Text style={[Typography.body1, { color: colors.text, flex: 1, marginLeft: Spacing.m }]}>
-                  Đăng thông báo / Quản lý điểm sơ tán
-                </Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              <TouchableOpacity style={styles.actionRow} onPress={() => setActiveTab('users')} activeOpacity={0.7}>
-                <Ionicons name="people-outline" size={20} color={colors.primary} />
-                <Text style={[Typography.body1, { color: colors.text, flex: 1, marginLeft: Spacing.m }]}>
-                  Quản lý người dùng
-                </Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-
-        {/* ── Users ── */}
-        {activeTab === 'users' && (
-          <>
-            <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.text }]}
-                placeholder="Tìm tên, email..."
-                placeholderTextColor={colors.textSecondary}
-                value={search}
-                onChangeText={setSearch}
-                autoCapitalize="none"
-              />
-              {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch('')}>
-                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {loading ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.xl }} />
-            ) : users.length === 0 ? (
-              <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
-                Không tìm thấy người dùng.
+      {/* ── Dashboard ── */}
+      {activeTab === 'dashboard' && (
+        <ScrollView
+          contentContainerStyle={styles.body}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        >
+          <View style={styles.statGrid}>
+            <StatCard icon="people" label="Người dùng" value={stats?.totalUsers ?? null} color={colors.primary} />
+            <StatCard icon="alert-circle" label="Yêu cầu cứu hộ" value={stats?.activeRescueRequests ?? null} color={colors.danger} />
+            <StatCard icon="analytics" label="Dự báo hôm nay" value={stats?.predictionsToday ?? null} color="#2ECC71" />
+            <StatCard icon="notifications" label="Thông báo" value={stats?.activeAlerts ?? null} color="#F39C12" />
+          </View>
+          <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.s }]}>THAO TÁC NHANH</Text>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <TouchableOpacity style={styles.actionRow} onPress={() => navigation.navigate('Authority')} activeOpacity={0.7}>
+              <Ionicons name="megaphone-outline" size={20} color={colors.primary} />
+              <Text style={[Typography.body1, { color: colors.text, flex: 1, marginLeft: Spacing.m }]}>
+                Đăng thông báo / Quản lý điểm sơ tán
               </Text>
-            ) : (
-              <View style={styles.listGap}>
-                {users.map((user) => (
-                  <TouchableOpacity
-                    key={user.id}
-                    style={[styles.userCard, { backgroundColor: colors.card }]}
-                    onPress={() => setSelectedUser(user)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.avatar, { backgroundColor: ROLE_COLORS[user.role] + '22' }]}>
-                      <Text style={[Typography.body1, { color: ROLE_COLORS[user.role], fontWeight: '700' }]}>
-                        {(user.name || user.email)[0].toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>
-                        {user.name || '(Chưa đặt tên)'}
-                      </Text>
-                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-                        {user.email}
-                      </Text>
-                    </View>
-                    <View style={[styles.rolePill, { backgroundColor: ROLE_COLORS[user.role] + '22' }]}>
-                      <Text style={[Typography.label, { color: ROLE_COLORS[user.role] }]}>
-                        {ROLE_LABELS[user.role]}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </>
-        )}
-
-        {/* ── Alerts ── */}
-        {activeTab === 'alerts' && (
-          <>
-            <TouchableOpacity
-              style={[styles.addAlertBtn, { backgroundColor: colors.primary }]}
-              onPress={() => navigation.navigate('Authority')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add" size={20} color="#fff" />
-              <Text style={[Typography.button, { color: '#fff', marginLeft: Spacing.s }]}>ĐĂNG THÔNG BÁO MỚI</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
-
-            {officialAlerts.length === 0 ? (
-              <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
-                Chưa có thông báo nào.
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={styles.actionRow} onPress={() => setActiveTab('users')} activeOpacity={0.7}>
+              <Ionicons name="people-outline" size={20} color={colors.primary} />
+              <Text style={[Typography.body1, { color: colors.text, flex: 1, marginLeft: Spacing.m }]}>
+                Quản lý người dùng
               </Text>
-            ) : (
-              <View style={styles.listGap}>
-                {officialAlerts.map((alert) => (
-                  <View key={alert.id} style={[styles.alertCard, { backgroundColor: colors.card }]}>
-                    {alert.isUrgent && <View style={[styles.accent, { backgroundColor: colors.danger }]} />}
-                    <View style={styles.alertInner}>
-                      <View style={styles.alertHeader}>
-                        <View style={{ flex: 1 }}>
-                          {alert.isUrgent && (
-                            <Text style={[Typography.label, { color: colors.danger }]}>KHẨN</Text>
-                          )}
-                          <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
-                            {alert.title}
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      )}
+
+      {/* ── Users ── */}
+      {activeTab === 'users' && (
+        <View style={{ flex: 1 }}>
+          <Toolbar
+            search={userSearch} onSearch={setUserSearch} placeholder="Tìm tên, email..."
+            showFilter={showUserFilter} onToggleFilter={() => setShowUserFilter((v) => !v)}
+          />
+          {showUserFilter && (
+            <View style={[styles.filterPanel, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+              <View style={styles.filterRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary, width: 60 }]}>QUYỀN</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={styles.filterOptions}>
+                  {['all', 'user', 'responder', 'admin'].map((v) => {
+                    const sel = userRoleFilter === v;
+                    return (
+                      <TouchableOpacity key={v} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setUserRoleFilter(v)}>
+                        <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>
+                          {v === 'all' ? 'Tất cả' : ROLE_LABELS[v]}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+              <View style={styles.filterRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary, width: 60 }]}>TỈNH</Text>
+                <TextInput
+                  style={[styles.filterInput, { color: colors.text, borderBottomColor: colors.border }]}
+                  placeholder="Lọc theo tỉnh..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={userProvinceFilter}
+                  onChangeText={setUserProvinceFilter}
+                />
+              </View>
+            </View>
+          )}
+          <ScrollView
+            contentContainerStyle={styles.tableBody}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
+            {loadingUsers
+              ? <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.xl }} />
+              : filteredUsers.length === 0
+                ? <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>Không tìm thấy người dùng.</Text>
+                : (
+                  <View style={[styles.tableCard, { backgroundColor: colors.card }]}>
+                    <View style={[styles.tableHeader, { backgroundColor: colors.secondary }]}>
+                      <View style={styles.colUser}><SortHdr col="name" label="TÊN / EMAIL" s={userSort} toggle={toggleUserSort} /></View>
+                      <View style={styles.colProvince}><SortHdr col="province" label="TỈNH/TP" s={userSort} toggle={toggleUserSort} /></View>
+                      <View style={styles.colRole}><SortHdr col="role" label="QUYỀN" s={userSort} toggle={toggleUserSort} /></View>
+                    </View>
+                    {filteredUsers.map((user, i) => (
+                      <React.Fragment key={user.id}>
+                        {i > 0 && <View style={[styles.rowDiv, { backgroundColor: colors.border }]} />}
+                        <TouchableOpacity style={styles.tableRow} onPress={() => setSelectedUser(user)} activeOpacity={0.7}>
+                          <View style={styles.colUser}>
+                            <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>
+                              {user.name || '(Chưa đặt tên)'}
+                            </Text>
+                            <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
+                              {user.email}
+                            </Text>
+                          </View>
+                          <View style={styles.colProvince}>
+                            <Text style={[Typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+                              {user.province || '—'}
+                            </Text>
+                          </View>
+                          <View style={styles.colRole}>
+                            <Text style={[Typography.body2, { color: ROLE_COLORS[user.role], fontWeight: '600' }]}>
+                              {ROLE_LABELS[user.role]}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      </React.Fragment>
+                    ))}
+                  </View>
+                )
+            }
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── Alerts ── */}
+      {activeTab === 'alerts' && (
+        <View style={{ flex: 1 }}>
+          <Toolbar
+            search={alertSearch} onSearch={setAlertSearch} placeholder="Tìm tiêu đề, nội dung..."
+            showFilter={showAlertFilter} onToggleFilter={() => setShowAlertFilter((v) => !v)}
+            onAdd={() => navigation.navigate('Authority')}
+          />
+          {showAlertFilter && (
+            <View style={[styles.filterPanel, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+              <View style={styles.filterRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary, width: 60 }]}>ƯU TIÊN</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={styles.filterOptions}>
+                  {[['all', 'Tất cả'], ['urgent', 'Khẩn'], ['normal', 'Thường']].map(([v, l]) => {
+                    const sel = alertUrgency === v;
+                    return (
+                      <TouchableOpacity key={v} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setAlertUrgency(v)}>
+                        <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>{l}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+              <View style={styles.filterRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary, width: 60 }]}>TỈNH</Text>
+                <TextInput
+                  style={[styles.filterInput, { color: colors.text, borderBottomColor: colors.border }]}
+                  placeholder="Lọc theo tỉnh..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={alertProvince}
+                  onChangeText={setAlertProvince}
+                />
+              </View>
+            </View>
+          )}
+          <ScrollView
+            contentContainerStyle={styles.tableBody}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
+            {filteredAlerts.length === 0
+              ? <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>Chưa có thông báo nào.</Text>
+              : (
+                <View style={[styles.tableCard, { backgroundColor: colors.card }]}>
+                  <View style={[styles.tableHeader, { backgroundColor: colors.secondary }]}>
+                    <View style={styles.colAlertTitle}><SortHdr col="title" label="TIÊU ĐỀ" s={alertSort} toggle={toggleAlertSort} /></View>
+                    <View style={styles.colAlertProvince}><SortHdr col="province" label="TỈNH" s={alertSort} toggle={toggleAlertSort} /></View>
+                    <View style={styles.colAlertDate}><SortHdr col="createdAt" label="NGÀY" s={alertSort} toggle={toggleAlertSort} /></View>
+                    <View style={{ width: 32 }} />
+                  </View>
+                  {filteredAlerts.map((alert, i) => (
+                    <React.Fragment key={alert.id}>
+                      {i > 0 && <View style={[styles.rowDiv, { backgroundColor: colors.border }]} />}
+                      <View style={styles.tableRow}>
+                        <View style={styles.colAlertTitle}>
+                          <Text style={[Typography.body2, { color: alert.isUrgent ? colors.danger : colors.text, fontWeight: alert.isUrgent ? '700' : '400' }]} numberOfLines={1}>{alert.title}</Text>
+                        </View>
+                        <View style={styles.colAlertProvince}>
+                          <Text style={[Typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {alert.province || 'Toàn quốc'}
                           </Text>
-                          {alert.province && (
-                            <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                              {alert.province}
+                        </View>
+                        <View style={styles.colAlertDate}>
+                          <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+                            {new Date(alert.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={{ width: 32, alignItems: 'center' }}
+                          onPress={() => handleDeleteAlert(alert.id)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    </React.Fragment>
+                  ))}
+                </View>
+              )
+            }
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── Points ── */}
+      {activeTab === 'points' && (
+        <View style={{ flex: 1 }}>
+          <Toolbar
+            search={pointSearch} onSearch={setPointSearch} placeholder="Tìm điểm sơ tán..."
+            showFilter={showPointFilter} onToggleFilter={() => setShowPointFilter((v) => !v)}
+            onAdd={() => setShowPointModal(true)}
+          />
+          {showPointFilter && (
+            <View style={[styles.filterPanel, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+              <View style={styles.filterRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary, width: 60 }]}>TRẠNG THÁI</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={styles.filterOptions}>
+                  {[['all', 'Tất cả'], ['active', 'Hoạt động'], ['inactive', 'Ngưng']].map(([v, l]) => {
+                    const sel = pointStatus === v;
+                    return (
+                      <TouchableOpacity key={v} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setPointStatus(v)}>
+                        <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>{l}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+              <View style={styles.filterRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary, width: 60 }]}>TỈNH</Text>
+                <TextInput
+                  style={[styles.filterInput, { color: colors.text, borderBottomColor: colors.border }]}
+                  placeholder="Lọc theo tỉnh..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={pointProvince}
+                  onChangeText={setPointProvince}
+                />
+              </View>
+            </View>
+          )}
+          <ScrollView
+            contentContainerStyle={styles.tableBody}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
+            {filteredPoints.length === 0
+              ? <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>Chưa có điểm sơ tán nào.</Text>
+              : (
+                <View style={[styles.tableCard, { backgroundColor: colors.card }]}>
+                  <View style={[styles.tableHeader, { backgroundColor: colors.secondary }]}>
+                    <View style={styles.colPtName}><SortHdr col="name" label="TÊN / ĐỊA CHỈ" s={pointSort} toggle={togglePointSort} /></View>
+                    <View style={styles.colPtStatus}><SortHdr col="isActive" label="KÍCH HOẠT" s={pointSort} toggle={togglePointSort} /></View>
+                    <View style={{ width: 32 }} />
+                  </View>
+                  {filteredPoints.map((point, i) => (
+                    <React.Fragment key={point.id}>
+                      {i > 0 && <View style={[styles.rowDiv, { backgroundColor: colors.border }]} />}
+                      <View style={styles.tableRow}>
+                        <View style={styles.colPtName}>
+                          <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>{point.name}</Text>
+                          {(point.address || point.province) && (
+                            <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
+                              {[point.address, point.province].filter(Boolean).join(' · ')}
                             </Text>
                           )}
                         </View>
+                        <View style={[styles.colPtStatus, { alignItems: 'center' }]}>
+                          <Switch
+                            value={point.isActive}
+                            onValueChange={() => handleTogglePoint(point)}
+                            trackColor={{ false: colors.border, true: '#2ECC71' }}
+                            thumbColor="#fff"
+                          />
+                        </View>
                         <TouchableOpacity
-                          onPress={() => handleDeleteAlert(alert.id)}
-                          style={styles.deleteIconBtn}
+                          style={{ width: 32, alignItems: 'center' }}
+                          onPress={() => handleDeletePoint(point.id)}
                           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                          <Ionicons name="trash-outline" size={16} color={colors.danger} />
                         </TouchableOpacity>
                       </View>
-                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: Spacing.xs }]} numberOfLines={2}>
-                        {alert.message}
-                      </Text>
-                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: Spacing.xs }]}>
-                        {new Date(alert.createdAt).toLocaleString('vi-VN')}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </>
-        )}
-      </ScrollView>
+                    </React.Fragment>
+                  ))}
+                </View>
+              )
+            }
+          </ScrollView>
+          <PointFormModal
+            visible={showPointModal}
+            onClose={() => setShowPointModal(false)}
+            onSubmit={handleAddPoint}
+            colors={colors}
+          />
+        </View>
+      )}
 
-      {/* User detail modal */}
       <UserDetailModal
         user={selectedUser}
         onClose={() => setSelectedUser(null)}
         onRoleChange={handleRoleChange}
-        onDelete={handleDelete}
+        onDelete={handleDeleteUser}
         colors={colors}
       />
     </SafeAreaView>
@@ -517,92 +770,64 @@ export const AdminScreen = () => {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.m,
-    paddingVertical: Spacing.m,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: Spacing.s,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: Spacing.m, paddingVertical: Spacing.m,
+    borderBottomWidth: StyleSheet.hairlineWidth, gap: Spacing.s,
   },
   backBtn: { padding: Spacing.xs },
   roleBadge: { paddingHorizontal: Spacing.s, paddingVertical: 3, borderRadius: 6 },
-  tabBar: { flexDirection: 'row', borderBottomWidth: 1, paddingHorizontal: Spacing.m },
+  tabBar: { borderBottomWidth: 1, flexGrow: 0 },
+  tabBarContent: { paddingHorizontal: Spacing.m },
   tab: {
-    paddingVertical: Spacing.m,
-    paddingRight: Spacing.l,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: Spacing.m, marginRight: Spacing.l,
+    borderBottomWidth: 2, borderBottomColor: 'transparent',
   },
   body: { padding: Spacing.m, paddingBottom: Spacing.xxl, gap: Spacing.s },
+  // Dashboard
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.s, marginBottom: Spacing.s },
-  statCard: {
-    width: '47.5%',
-    padding: Spacing.m,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
+  statCard: { width: '47.5%', padding: Spacing.m, borderRadius: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
   statIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  card: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
+  card: { borderRadius: 12, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
   actionRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.m },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.m },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.s,
-    paddingHorizontal: Spacing.m,
-    height: 44,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: Spacing.xs,
+  // Toolbar
+  toolbar: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.s,
+    paddingHorizontal: Spacing.m, paddingVertical: Spacing.s,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  searchInput: { flex: 1, fontSize: 15 },
-  listGap: { gap: Spacing.s },
-  userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.m,
-    padding: Spacing.m,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+  searchBar: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    height: 40, borderRadius: 10, paddingHorizontal: Spacing.s, gap: Spacing.xs,
   },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  rolePill: { paddingHorizontal: Spacing.s, paddingVertical: 3, borderRadius: 6 },
-  addAlertBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 10,
-    marginBottom: Spacing.xs,
+  searchInput: { flex: 1, fontSize: 14 },
+  iconBtn: { width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  // Filter panel
+  filterPanel: {
+    paddingHorizontal: Spacing.m, paddingVertical: Spacing.s,
+    borderBottomWidth: StyleSheet.hairlineWidth, gap: Spacing.s,
   },
-  alertCard: {
-    borderRadius: 12,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  accent: { width: 4 },
-  alertInner: { flex: 1, padding: Spacing.m },
-  alertHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.s },
-  deleteIconBtn: { padding: Spacing.xs },
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.m },
+  filterOptions: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
+  filterChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14 },
+  filterInput: { flex: 1, fontSize: 13, borderBottomWidth: 1, paddingVertical: 3 },
+  actionSlot: { width: 28, alignItems: 'center' as const, justifyContent: 'center' as const },
+  // Table
+  tableBody: { padding: Spacing.m, paddingBottom: Spacing.xxl },
+  tableCard: { borderRadius: 12, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+  tableHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.m, paddingVertical: Spacing.s },
+  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.m, paddingVertical: Spacing.m },
+  rowDiv: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.m },
+  sortHdr: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  // Users columns
+  colUser: { flex: 1 },
+  colProvince: { width: 88 },
+  colRole: { width: 64 },
+  // Alerts columns
+  colAlertTitle: { flex: 1 },
+  colAlertProvince: { width: 72 },
+  colAlertDate: { width: 44 },
+  // Points columns
+  colPtName: { flex: 1 },
+  colPtStatus: { width: 60 },
 });

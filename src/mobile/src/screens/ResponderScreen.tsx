@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Image, TouchableOpacity, TextInput,
   StyleSheet, Alert, ActivityIndicator, RefreshControl,
-  Switch, Linking, Platform,
+  Switch, Linking, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -10,16 +10,51 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { rescueApi, RescuePoint, RescueRequest } from '../api/rescue';
+import { officialAlertsApi } from '../api/officialAlerts';
 import { API_URL } from '../api/client';
 import { useResponderStore } from '../store/useResponderStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useAlertStore } from '../store/useAlertStore';
+import { PointFormModal, PointFormData } from '../components/PointFormModal';
 
-type ResponderTab = 'open' | 'assigned' | 'resolved' | 'points';
+type ResponderTab = 'open' | 'assigned' | 'resolved' | 'points' | 'alerts';
+type PointFilter = 'all' | 'active' | 'inactive';
+
+type Sort = { col: string; dir: 'asc' | 'desc' } | null;
+
+function useSort(): [Sort, (col: string) => void] {
+  const [s, setS] = useState<Sort>(null);
+  const toggle = (col: string) =>
+    setS((prev) =>
+      prev?.col !== col ? { col, dir: 'asc' }
+      : prev.dir === 'asc' ? { col, dir: 'desc' }
+      : null
+    );
+  return [s, toggle];
+}
+
+function sorted<T extends Record<string, any>>(data: T[], s: Sort): T[] {
+  if (!s) return data;
+  return [...data].sort((a, b) => {
+    const av = a[s.col] ?? '';
+    const bv = b[s.col] ?? '';
+    const cmp = typeof av === 'number' && typeof bv === 'number'
+      ? av - bv
+      : String(av).localeCompare(String(bv), 'vi');
+    return s.dir === 'asc' ? cmp : -cmp;
+  });
+}
 
 const STATUS_COLOR: Record<string, string> = {
   open: '#E74C3C',
   assigned: '#F39C12',
   resolved: '#2ECC71',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  open: 'Chờ xử lý',
+  assigned: 'Đang xử lý',
+  resolved: 'Hoàn thành',
 };
 
 function openExternalNav(lat: number, lon: number) {
@@ -31,7 +66,7 @@ function openExternalNav(lat: number, lon: number) {
   );
 }
 
-// ── Request card shared between open and assigned tabs ─────────────────────
+// ── Request card ──────────────────────────────────────────────────────────────
 
 interface RequestCardProps {
   req: RescueRequest;
@@ -56,80 +91,87 @@ const RequestCard: React.FC<RequestCardProps> = ({ req, currentUserId, onAccept,
     return `${Math.floor(hrs / 24)} ngày trước`;
   })();
 
+  const accentColor = STATUS_COLOR[req.status] ?? colors.border;
+
   return (
-    <View style={[styles.feedItem, { borderBottomColor: colors.border }]}>
-      {/* Meta line */}
-      <View style={styles.feedMeta}>
-        <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR[req.status] ?? colors.border }]} />
-        <Text style={[Typography.body2, { color: colors.text, fontWeight: '700', flex: 1 }]}>
-          Yêu cầu #{req.id} · {req.peopleCount} người
+    <View style={[styles.reqCard, { backgroundColor: colors.card }]}>
+      <View style={[styles.reqAccent, { backgroundColor: accentColor }]} />
+      <View style={styles.reqInner}>
+        <View style={styles.reqHeader}>
+          <Text style={[Typography.body2, { color: colors.text, fontWeight: '700', flex: 1 }]}>
+            Yêu cầu #{req.id} · {req.peopleCount} người
+          </Text>
+          <Text style={[Typography.label, { color: accentColor, fontWeight: '600' }]}>
+            {STATUS_LABEL[req.status] ?? req.status}
+          </Text>
+        </View>
+
+        <Text style={[Typography.caption, { color: colors.textSecondary, marginBottom: Spacing.s }]}>
+          {timeAgo}
         </Text>
-        <Text style={[Typography.caption, { color: colors.textSecondary }]}>{timeAgo}</Text>
-      </View>
 
-      {/* Notes */}
-      {req.notes ? (
-        <Text style={[Typography.body1, { color: colors.text, marginBottom: Spacing.xs }]} numberOfLines={3}>
-          {req.notes}
-        </Text>
-      ) : null}
+        {req.notes ? (
+          <Text style={[Typography.body1, { color: colors.text, marginBottom: Spacing.s }]} numberOfLines={3}>
+            {req.notes}
+          </Text>
+        ) : null}
 
-      {/* Location */}
-      <Text style={[Typography.caption, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>
-        {req.lat.toFixed(5)}°N, {req.lon.toFixed(5)}°E
-      </Text>
+        <View style={styles.locationRow}>
+          <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
+          <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+            {req.lat.toFixed(5)}°N, {req.lon.toFixed(5)}°E
+          </Text>
+        </View>
 
-      {/* Photos */}
-      {(req.photos ?? []).length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoStrip}>
-          {(req.photos ?? []).map((p, i) => (
-            <Image key={i} source={{ uri: `${API_URL}${p}` }} style={styles.photoThumb} />
-          ))}
-        </ScrollView>
-      )}
-
-      {/* Assignees inline */}
-      {assignedUsers.length > 0 && (
-        <Text style={[Typography.caption, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>
-          Tiếp nhận bởi{' '}
-          {assignedUsers.map((u, i) => (
-            <Text key={u.id} style={{ color: u.id === currentUserId ? colors.primary : colors.text, fontWeight: '600' }}>
-              {u.name + (i < assignedUsers.length - 1 ? ', ' : '')}
-            </Text>
-          ))}
-        </Text>
-      )}
-
-      {/* Action bar */}
-      <View style={[styles.feedActions, { borderTopColor: colors.border }]}>
-        {!isAssignedToMe && (
-          <TouchableOpacity style={styles.feedAction} onPress={() => onAccept(req)} disabled={busy} activeOpacity={0.7}>
-            {busy
-              ? <ActivityIndicator size="small" color={colors.warning} />
-              : <>
-                  <Ionicons name="hand-left-outline" size={16} color={colors.warning} />
-                  <Text style={[Typography.label, { color: colors.warning, marginLeft: 4 }]}>Tiếp nhận</Text>
-                </>
-            }
-          </TouchableOpacity>
+        {(req.photos ?? []).length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoStrip}>
+            {(req.photos ?? []).map((p, i) => (
+              <Image key={i} source={{ uri: `${API_URL}${p}` }} style={styles.photoThumb} />
+            ))}
+          </ScrollView>
         )}
-        {isAssignedToMe && req.status !== 'resolved' && (
-          <TouchableOpacity style={styles.feedAction} onPress={() => onResolve(req.id)} disabled={busy} activeOpacity={0.7}>
-            {busy
-              ? <ActivityIndicator size="small" color={colors.success} />
-              : <>
-                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-                  <Text style={[Typography.label, { color: colors.success, marginLeft: 4 }]}>Hoàn thành</Text>
-                </>
-            }
-          </TouchableOpacity>
+
+        {assignedUsers.length > 0 && (
+          <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: Spacing.xs }]}>
+            Tiếp nhận bởi{' '}
+            {assignedUsers.map((u, i) => (
+              <Text key={u.id} style={{ color: u.id === currentUserId ? colors.primary : colors.text, fontWeight: '600' }}>
+                {u.name + (i < assignedUsers.length - 1 ? ', ' : '')}
+              </Text>
+            ))}
+          </Text>
         )}
-        {isAssignedToMe && (
-          <View style={[styles.feedAction, { opacity: 0.5 }]}>
-            <Ionicons name="checkmark-done-outline" size={14} color={colors.primary} />
-            <Text style={[Typography.label, { color: colors.primary, marginLeft: 4 }]}>Đã tiếp nhận</Text>
-          </View>
-        )}
+
+        <View style={[styles.feedActions, { borderTopColor: colors.border }]}>
+          {!isAssignedToMe && (
+            <TouchableOpacity style={styles.feedAction} onPress={() => onAccept(req)} disabled={busy} activeOpacity={0.7}>
+              {busy
+                ? <ActivityIndicator size="small" color={colors.warning} />
+                : <>
+                    <Ionicons name="hand-left-outline" size={16} color={colors.warning} />
+                    <Text style={[Typography.label, { color: colors.warning, marginLeft: 4 }]}>Tiếp nhận</Text>
+                  </>
+              }
+            </TouchableOpacity>
+          )}
+          {isAssignedToMe && req.status !== 'resolved' && (
+            <TouchableOpacity style={styles.feedAction} onPress={() => onResolve(req.id)} disabled={busy} activeOpacity={0.7}>
+              {busy
+                ? <ActivityIndicator size="small" color={colors.success} />
+                : <>
+                    <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+                    <Text style={[Typography.label, { color: colors.success, marginLeft: 4 }]}>Hoàn thành</Text>
+                  </>
+              }
+            </TouchableOpacity>
+          )}
+          {isAssignedToMe && (
+            <View style={[styles.feedAction, { opacity: 0.5 }]}>
+              <Ionicons name="checkmark-done-outline" size={14} color={colors.primary} />
+              <Text style={[Typography.label, { color: colors.primary, marginLeft: 4 }]}>Đã tiếp nhận</Text>
+            </View>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -142,6 +184,7 @@ export const ResponderScreen = () => {
   const navigation = useNavigation<NavigationProp<any>>();
   const setPendingNav = useResponderStore((s) => s.setPendingNav);
   const currentUser = useAuthStore((s) => s.user);
+  const fetchAlerts = useAlertStore((s) => s.fetchAlerts);
 
   const [activeTab, setActiveTab] = useState<ResponderTab>('open');
   const [refreshing, setRefreshing] = useState(false);
@@ -151,21 +194,48 @@ export const ResponderScreen = () => {
   const [assignedReqs, setAssignedReqs] = useState<RescueRequest[]>([]);
   const [resolvedReqs, setResolvedReqs] = useState<RescueRequest[]>([]);
 
-  // Points state
+  // Points
   const [points, setPoints] = useState<RescuePoint[]>([]);
   const [pointSearch, setPointSearch] = useState('');
-  const [showAddPoint, setShowAddPoint] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newAddress, setNewAddress] = useState('');
-  const [newCapacity, setNewCapacity] = useState('');
-  const [newProvince, setNewProvince] = useState('');
-  const [addingPoint, setAddingPoint] = useState(false);
+  const [pointFilter, setPointFilter] = useState<PointFilter>('all');
+  const [showPointFilter, setShowPointFilter] = useState(false);
+  const [showPointModal, setShowPointModal] = useState(false);
+  const [pointSort, togglePointSort] = useSort();
+
+  // Alerts
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertProvince, setAlertProvince] = useState('');
+  const [isUrgent, setIsUrgent] = useState(false);
+  const [posting, setPosting] = useState(false);
+
+  const SortHdr = ({ col, label, s, toggle, style }: {
+    col: string; label: string; s: Sort; toggle: (c: string) => void; style?: any;
+  }) => (
+    <TouchableOpacity
+      style={[{ flexDirection: 'row', alignItems: 'center', gap: 2 }, style]}
+      onPress={() => toggle(col)}
+    >
+      <Text style={[
+        Typography.label,
+        { color: s?.col === col ? colors.primary : colors.textSecondary, fontWeight: s?.col === col ? '700' : '400' },
+      ]}>
+        {label}
+      </Text>
+      <Ionicons
+        name={s?.col !== col ? 'swap-vertical-outline' : s.dir === 'asc' ? 'arrow-up' : 'arrow-down'}
+        size={11}
+        color={s?.col === col ? colors.primary : colors.textSecondary}
+      />
+    </TouchableOpacity>
+  );
 
   const loadTab = useCallback(async (tab: ResponderTab) => {
     if (tab === 'points') {
-      try { setPoints(await rescueApi.getPoints()); } catch { /* keep */ }
+      try { setPoints(await rescueApi.getAllPoints()); } catch { /* keep */ }
       return;
     }
+    if (tab === 'alerts') return;
     try {
       const data = await rescueApi.getByStatus(tab as 'open' | 'assigned' | 'resolved');
       if (tab === 'open') setOpenReqs(data);
@@ -189,7 +259,7 @@ export const ResponderScreen = () => {
     try {
       await rescueApi.assignSelf(req.id);
       setPendingNav({ id: req.id, lat: req.lat, lon: req.lon, label: `Yêu cầu #${req.id}` });
-      navigation.navigate('MainTabs' as never, { screen: 'Bản đồ' } as never);
+      (navigation as any).navigate('MainTabs', { screen: 'Bản đồ' });
     } catch {
       Alert.alert('Lỗi', 'Không thể tiếp nhận. Thử lại.');
     }
@@ -209,23 +279,10 @@ export const ResponderScreen = () => {
     setUpdatingId(null);
   };
 
-  const handleAddPoint = async () => {
-    if (!newName.trim()) { Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên điểm sơ tán.'); return; }
-    setAddingPoint(true);
-    try {
-      const point = await rescueApi.createPoint({
-        name: newName.trim(),
-        address: newAddress.trim() || undefined,
-        capacity: newCapacity ? parseInt(newCapacity, 10) : undefined,
-        province: newProvince.trim() || undefined,
-        lat: 0,
-        lon: 0,
-      });
-      setPoints((prev) => [point, ...prev]);
-      setNewName(''); setNewAddress(''); setNewCapacity(''); setNewProvince('');
-      setShowAddPoint(false);
-    } catch { Alert.alert('Lỗi', 'Không thể thêm điểm. Thử lại.'); }
-    setAddingPoint(false);
+  const handleAddPoint = async (data: PointFormData) => {
+    const point = await rescueApi.createPoint(data);
+    setPoints((prev) => [point, ...prev]);
+    setShowPointModal(false);
   };
 
   const handleTogglePoint = async (point: RescuePoint) => {
@@ -235,11 +292,47 @@ export const ResponderScreen = () => {
     } catch { Alert.alert('Lỗi', 'Không thể cập nhật. Thử lại.'); }
   };
 
+  const handlePostAlert = async () => {
+    if (!alertTitle.trim() || !alertMessage.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tiêu đề và nội dung.');
+      return;
+    }
+    setPosting(true);
+    try {
+      await officialAlertsApi.create({
+        title: alertTitle.trim(),
+        message: alertMessage.trim(),
+        isUrgent,
+        province: alertProvince.trim() || undefined,
+      });
+      setAlertTitle(''); setAlertMessage(''); setAlertProvince(''); setIsUrgent(false);
+      fetchAlerts();
+      Alert.alert('Đã đăng', 'Thông báo đã được gửi đến người dùng.');
+    } catch {
+      Alert.alert('Lỗi', 'Không thể đăng thông báo. Thử lại.');
+    }
+    setPosting(false);
+  };
+
+  const filteredPoints = useMemo(() => {
+    const q = pointSearch.trim().toLowerCase();
+    const base = points.filter((p) => {
+      if (pointFilter === 'active' && !p.isActive) return false;
+      if (pointFilter === 'inactive' && p.isActive) return false;
+      if (q) return p.name.toLowerCase().includes(q) ||
+        (p.address ?? '').toLowerCase().includes(q) ||
+        (p.province ?? '').toLowerCase().includes(q);
+      return true;
+    });
+    return sorted(base, pointSort);
+  }, [points, pointSearch, pointFilter, pointSort]);
+
   const tabs: { key: ResponderTab; label: string; count?: number }[] = [
     { key: 'open',     label: 'Chờ xử lý', count: openReqs.length },
     { key: 'assigned', label: 'Đang xử lý', count: assignedReqs.length },
     { key: 'resolved', label: 'Hoàn thành' },
     { key: 'points',   label: 'Điểm sơ tán' },
+    { key: 'alerts',   label: 'Thông báo' },
   ];
 
   const renderRequests = (list: RescueRequest[]) => (
@@ -328,7 +421,7 @@ export const ResponderScreen = () => {
         </ScrollView>
       )}
 
-      {/* ── Resolved requests (minimal) ── */}
+      {/* ── Resolved requests ── */}
       {activeTab === 'resolved' && (
         <ScrollView
           contentContainerStyle={styles.body}
@@ -343,21 +436,26 @@ export const ResponderScreen = () => {
                 {resolvedReqs.map((req) => {
                   const assignedUsers = req.assignedUsers ?? [];
                   return (
-                    <View key={req.id} style={[styles.feedItem, { borderBottomColor: colors.border, opacity: 0.75 }]}>
-                      <View style={styles.feedMeta}>
-                        <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR.resolved }]} />
-                        <Text style={[Typography.body2, { color: colors.text, fontWeight: '700', flex: 1 }]}>
-                          Yêu cầu #{req.id} · {req.peopleCount} người
-                        </Text>
-                        <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+                    <View key={req.id} style={[styles.reqCard, { backgroundColor: colors.card, opacity: 0.72 }]}>
+                      <View style={[styles.reqAccent, { backgroundColor: STATUS_COLOR.resolved }]} />
+                      <View style={styles.reqInner}>
+                        <View style={styles.reqHeader}>
+                          <Text style={[Typography.body2, { color: colors.text, fontWeight: '700', flex: 1 }]}>
+                            Yêu cầu #{req.id} · {req.peopleCount} người
+                          </Text>
+                          <Text style={[Typography.label, { color: STATUS_COLOR.resolved, fontWeight: '600' }]}>
+                            Hoàn thành
+                          </Text>
+                        </View>
+                        <Text style={[Typography.caption, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>
                           {new Date(req.updatedAt).toLocaleString('vi-VN')}
                         </Text>
+                        {assignedUsers.length > 0 && (
+                          <Text style={[Typography.caption, { color: colors.textSecondary }]}>
+                            Cứu hộ: {assignedUsers.map((u) => u.name).join(', ')}
+                          </Text>
+                        )}
                       </View>
-                      {assignedUsers.length > 0 && (
-                        <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-                          Cứu hộ: {assignedUsers.map((u) => u.name).join(', ')}
-                        </Text>
-                      )}
                     </View>
                   );
                 })}
@@ -369,7 +467,7 @@ export const ResponderScreen = () => {
       {/* ── Evacuation points ── */}
       {activeTab === 'points' && (
         <View style={{ flex: 1 }}>
-          <View style={[styles.pointsToolbar, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+          <View style={[styles.pointsToolbar, { borderBottomColor: colors.border }]}>
             <View style={[styles.pointSearchBar, { backgroundColor: colors.secondary }]}>
               <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
               <TextInput
@@ -378,128 +476,186 @@ export const ResponderScreen = () => {
                 placeholderTextColor={colors.textSecondary}
                 value={pointSearch}
                 onChangeText={setPointSearch}
-                returnKeyType="search"
                 clearButtonMode="while-editing"
               />
+              {pointSearch.length > 0 && Platform.OS === 'android' && (
+                <TouchableOpacity onPress={() => setPointSearch('')}>
+                  <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
             </View>
             <TouchableOpacity
-              style={[styles.pointAddBtn, { backgroundColor: showAddPoint ? colors.primary : colors.secondary }]}
-              onPress={() => setShowAddPoint((v) => !v)}
-              activeOpacity={0.8}
+              style={[styles.pointIconBtn, { backgroundColor: showPointFilter ? colors.primary : colors.secondary }]}
+              onPress={() => setShowPointFilter((v) => !v)}
             >
-              <Ionicons name={showAddPoint ? 'close' : 'add'} size={22} color={showAddPoint ? '#fff' : colors.primary} />
+              <Ionicons name="options-outline" size={18} color={showPointFilter ? '#fff' : colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.pointIconBtn, { backgroundColor: colors.primary }]}
+              onPress={() => setShowPointModal(true)}
+            >
+              <Ionicons name="add" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
 
+          {showPointFilter && (
+            <View style={[styles.filterPanel, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+              <Text style={[Typography.label, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>TRẠNG THÁI</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
+                {(['all', 'active', 'inactive'] as const).map((f) => {
+                  const sel = pointFilter === f;
+                  return (
+                    <TouchableOpacity key={f} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setPointFilter(f)}>
+                      <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>
+                        {f === 'all' ? 'Tất cả' : f === 'active' ? 'Hoạt động' : 'Ngưng'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          <ScrollView
+            contentContainerStyle={styles.ptTableBody}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
+            {filteredPoints.length === 0 ? (
+              <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
+                {pointSearch.trim() || pointFilter !== 'all' ? 'Không tìm thấy điểm phù hợp.' : 'Chưa có điểm sơ tán nào.'}
+              </Text>
+            ) : (
+              <View style={[styles.ptTableCard, { backgroundColor: colors.card }]}>
+                <View style={[styles.ptTableHeader, { backgroundColor: colors.secondary }]}>
+                  <SortHdr col="name" label="TÊN ĐIỂM / ĐỊA CHỈ" s={pointSort} toggle={togglePointSort} style={styles.ptColName} />
+                  <SortHdr col="capacity" label="SỨC CHỨA" s={pointSort} toggle={togglePointSort} style={styles.ptColCap} />
+                  <View style={styles.ptColStatus}>
+                    <Text style={[Typography.label, { color: colors.textSecondary, textAlign: 'center' }]}>KÍCH HOẠT</Text>
+                  </View>
+                </View>
+                {filteredPoints.map((point, i) => (
+                  <React.Fragment key={point.id}>
+                    {i > 0 && <View style={[styles.ptRowDivider, { backgroundColor: colors.border }]} />}
+                    <View style={styles.ptTableRow}>
+                      <View style={styles.ptColName}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[Typography.body2, { color: colors.text, fontWeight: '600', flex: 1 }]} numberOfLines={1}>
+                            {point.name}
+                          </Text>
+                          {point.lat !== 0 && (
+                            <TouchableOpacity
+                              onPress={() => openExternalNav(point.lat, point.lon)}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <Ionicons name="navigate-outline" size={14} color={colors.primary} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        {(point.address || point.province) && (
+                          <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
+                            {[point.address, point.province].filter(Boolean).join(' · ')}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.ptColCap}>
+                        <Text style={[Typography.body2, { color: colors.text, textAlign: 'center' }]}>
+                          {point.capacity || '—'}
+                        </Text>
+                      </View>
+                      <View style={[styles.ptColStatus, { alignItems: 'center' }]}>
+                        <Switch
+                          value={point.isActive}
+                          onValueChange={() => handleTogglePoint(point)}
+                          trackColor={{ false: colors.border, true: '#2ECC71' }}
+                          thumbColor="#fff"
+                        />
+                      </View>
+                    </View>
+                  </React.Fragment>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+
+          <PointFormModal
+            visible={showPointModal}
+            onClose={() => setShowPointModal(false)}
+            onSubmit={handleAddPoint}
+            colors={colors}
+          />
+        </View>
+      )}
+
+      {/* ── Post Alert ── */}
+      {activeTab === 'alerts' && (
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView
             contentContainerStyle={styles.body}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           >
-            {showAddPoint && (
-              <View style={[styles.formCard, { backgroundColor: colors.card, margin: Spacing.m, marginBottom: 0 }]}>
-                <Text style={[Typography.label, { color: colors.textSecondary }]}>TÊN ĐIỂM</Text>
-                <TextInput
-                  style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
-                  placeholder="VD: Trường THCS Lê Lợi"
-                  placeholderTextColor={colors.textSecondary}
-                  value={newName}
-                  onChangeText={setNewName}
-                />
-                <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>ĐỊA CHỈ</Text>
-                <TextInput
-                  style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
-                  placeholder="Số nhà, đường, phường..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={newAddress}
-                  onChangeText={setNewAddress}
-                />
-                <View style={styles.twoCol}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>SỨC CHỨA</Text>
-                    <TextInput
-                      style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
-                      placeholder="Số người"
-                      placeholderTextColor={colors.textSecondary}
-                      value={newCapacity}
-                      onChangeText={setNewCapacity}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: Spacing.m }}>
-                    <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>TỈNH / TP</Text>
-                    <TextInput
-                      style={[styles.cardInput, { color: colors.text, borderBottomColor: colors.border }]}
-                      placeholder="Tỉnh..."
-                      placeholderTextColor={colors.textSecondary}
-                      value={newProvince}
-                      onChangeText={setNewProvince}
-                    />
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={[styles.submitBtn, { backgroundColor: addingPoint ? colors.textSecondary : colors.primary, marginTop: Spacing.m }]}
-                  onPress={handleAddPoint}
-                  disabled={addingPoint}
-                  activeOpacity={0.8}
-                >
-                  {addingPoint
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={[Typography.button, { color: '#fff' }]}>LƯU ĐIỂM</Text>
-                  }
-                </TouchableOpacity>
-              </View>
-            )}
+            <Text style={[Typography.label, { color: colors.textSecondary }]}>TIÊU ĐỀ</Text>
+            <TextInput
+              style={[styles.alertInput, { color: colors.text, borderBottomColor: colors.border }]}
+              placeholder="Tên thông báo..."
+              placeholderTextColor={colors.textSecondary}
+              value={alertTitle}
+              onChangeText={setAlertTitle}
+            />
 
-            {(() => {
-              const q = pointSearch.trim().toLowerCase();
-              const filtered = q
-                ? points.filter((p) =>
-                    p.name.toLowerCase().includes(q) ||
-                    (p.address ?? '').toLowerCase().includes(q) ||
-                    (p.province ?? '').toLowerCase().includes(q)
-                  )
-                : points;
-              if (filtered.length === 0) return (
-                <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl, paddingHorizontal: Spacing.m }]}>
-                  {q ? 'Không tìm thấy điểm phù hợp.' : 'Chưa có điểm sơ tán nào.'}
+            <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>NỘI DUNG</Text>
+            <TextInput
+              style={[styles.alertTextarea, { color: colors.text, borderBottomColor: colors.border }]}
+              placeholder="Chi tiết thông báo, hướng dẫn sơ tán..."
+              placeholderTextColor={colors.textSecondary}
+              value={alertMessage}
+              onChangeText={setAlertMessage}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.m }]}>
+              TỈNH / TP (TÙY CHỌN)
+            </Text>
+            <TextInput
+              style={[styles.alertInput, { color: colors.text, borderBottomColor: colors.border }]}
+              placeholder="Để trống nếu áp dụng toàn quốc"
+              placeholderTextColor={colors.textSecondary}
+              value={alertProvince}
+              onChangeText={setAlertProvince}
+            />
+
+            <View style={[styles.urgentRow, { backgroundColor: colors.card }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[Typography.body1, { color: colors.text }]}>Thông báo khẩn cấp</Text>
+                <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                  Hiển thị nổi bật, màu đỏ, ưu tiên cao nhất
                 </Text>
-              );
-              return (
-                <View style={styles.listGap}>
-                  {filtered.map((point) => (
-                    <View key={point.id} style={[styles.pointCard, { backgroundColor: colors.card }]}>
-                      <View style={[styles.pointDot, { backgroundColor: point.isActive ? '#2ECC71' : colors.border }]} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]}>{point.name}</Text>
-                        <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                          {point.address || point.province || 'Chưa có địa chỉ'}
-                          {point.capacity ? ` · ${point.capacity} người` : ''}
-                        </Text>
-                      </View>
-                      {point.lat !== 0 && (
-                        <TouchableOpacity
-                          style={styles.pointNavBtn}
-                          onPress={() => openExternalNav(point.lat, point.lon)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Ionicons name="navigate-outline" size={18} color={colors.primary} />
-                        </TouchableOpacity>
-                      )}
-                      <Switch
-                        value={point.isActive}
-                        onValueChange={() => handleTogglePoint(point)}
-                        trackColor={{ false: colors.border, true: '#2ECC71' }}
-                        thumbColor="#fff"
-                      />
-                    </View>
-                  ))}
-                </View>
-              );
-            })()}
+              </View>
+              <Switch
+                value={isUrgent}
+                onValueChange={setIsUrgent}
+                trackColor={{ false: colors.border, true: colors.danger }}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.alertSubmitBtn, { backgroundColor: posting ? colors.textSecondary : colors.primary }]}
+              onPress={handlePostAlert}
+              disabled={posting}
+              activeOpacity={0.8}
+            >
+              {posting
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={[Typography.button, { color: '#fff' }]}>ĐĂNG THÔNG BÁO</Text>
+              }
+            </TouchableOpacity>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       )}
     </SafeAreaView>
   );
@@ -537,20 +693,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  body: { paddingBottom: Spacing.xxl },
-  listGap: {},
-  feedItem: {
-    paddingHorizontal: Spacing.m,
-    paddingVertical: Spacing.m,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  feedMeta: {
+  body: { paddingTop: Spacing.m, paddingBottom: Spacing.xxl },
+  listGap: { gap: Spacing.m },
+  reqCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.s,
-    marginBottom: Spacing.xs,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginHorizontal: Spacing.m,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  reqAccent: { width: 5 },
+  reqInner: { flex: 1, padding: Spacing.m },
+  reqHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.s, marginBottom: 2 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.xs },
   feedActions: {
     flexDirection: 'row',
     gap: Spacing.l,
@@ -559,82 +718,16 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   feedAction: { flexDirection: 'row', alignItems: 'center' },
-  card: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  resolvedCard: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    overflow: 'hidden',
-    opacity: 0.75,
-  },
-  cardAccent: { width: 4 },
-  cardInner: { flex: 1, padding: Spacing.m },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  assigneeList: {
-    marginTop: Spacing.s,
-    padding: Spacing.s,
-    borderRadius: 8,
-    gap: 4,
-  },
-  assigneeRow: { flexDirection: 'row', alignItems: 'center' },
-  actionRow: { flexDirection: 'row', gap: Spacing.s, marginTop: Spacing.m },
-  actionBtn: {
-    paddingHorizontal: Spacing.m,
-    paddingVertical: Spacing.s,
-    borderRadius: 8,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 10,
-    borderWidth: 1.5,
-  },
-  formCard: {
-    borderRadius: 12,
-    padding: Spacing.m,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardInput: { fontSize: 14, borderBottomWidth: 1, paddingVertical: Spacing.s, marginTop: Spacing.xs },
-  twoCol: { flexDirection: 'row' },
-  submitBtn: { height: 50, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  pointCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.m,
-    padding: Spacing.m,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  pointDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-  pointNavBtn: { padding: Spacing.xs },
   photoStrip: { marginBottom: Spacing.xs },
   photoThumb: { width: 80, height: 80, borderRadius: 8, marginRight: Spacing.s },
+  // Points tab toolbar
   pointsToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.s,
     paddingHorizontal: Spacing.m,
     paddingVertical: Spacing.s,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   pointSearchBar: {
     flex: 1,
@@ -646,11 +739,75 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   pointSearchInput: { flex: 1, fontSize: 14 },
-  pointAddBtn: {
+  pointIconBtn: {
     width: 40,
     height: 40,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Filter panel
+  filterPanel: {
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  filterOptions: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
+  filterChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14 },
+  // Points table
+  ptTableBody: { padding: Spacing.m, paddingBottom: Spacing.xxl },
+  ptTableCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  ptTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+  },
+  ptTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.m,
+  },
+  ptRowDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.m },
+  ptColName: { flex: 1 },
+  ptColCap: { width: 52 },
+  ptColStatus: { width: 60 },
+  // Alert form
+  alertInput: {
+    fontSize: 15,
+    borderBottomWidth: 1.5,
+    paddingVertical: Spacing.s,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  alertTextarea: {
+    fontSize: 15,
+    borderBottomWidth: 1.5,
+    paddingVertical: Spacing.s,
+    marginTop: Spacing.xs,
+    minHeight: 80,
+  },
+  urgentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.m,
+    borderRadius: 12,
+    marginTop: Spacing.m,
+  },
+  alertSubmitBtn: {
+    height: 50,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.l,
   },
 });

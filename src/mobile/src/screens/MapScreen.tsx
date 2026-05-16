@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, Image, TouchableOpacity, TextInput,
-  StyleSheet, Platform, LayoutAnimation, ActivityIndicator, Alert,
+  StyleSheet, Platform, LayoutAnimation, ActivityIndicator, Alert, Modal,
 } from 'react-native';
 import MapView, { Marker, Polygon, Polyline, PROVIDER_DEFAULT, MapType } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -19,8 +19,40 @@ import basinPolygons from '../assets/vietnamBasinPolygons';
 import { BasinForecast } from '../mock/floodData';
 import { rescueApi, RescuePoint, RescueRequest } from '../api/rescue';
 import { API_URL } from '../api/client';
+import { useAlertStore } from '../store/useAlertStore';
+import { useNotifications } from '../hooks/useNotifications';
 
 const LAYOUT_ANIM = LayoutAnimation.create(220, 'easeInEaseOut', 'opacity');
+
+function haversineMeters(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): number {
+  const R = 6_371_000;
+  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.latitude * Math.PI) / 180) *
+    Math.cos((b.latitude * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function isPointInPolygon(
+  point: { latitude: number; longitude: number },
+  polygon: { latitude: number; longitude: number }[],
+): boolean {
+  const x = point.longitude;
+  const y = point.latitude;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].longitude, yi = polygon[i].latitude;
+    const xj = polygon[j].longitude, yj = polygon[j].latitude;
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
 
 function timeAgo(createdAt: string) {
   const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
@@ -78,6 +110,9 @@ export const MapScreen = () => {
   const user = useAuthStore((s) => s.user);
   const isResponder = user?.role === 'responder' || user?.role === 'admin';
   const { pendingNav, setPendingNav } = useResponderStore();
+  const addAlert = useAlertStore((s) => s.addAlert);
+  const { scheduleAlert } = useNotifications();
+  const notifiedZonesRef = useRef<Set<string>>(new Set());
 
   // Re-fetch when the map tab is focused (respects 5-min cooldown in the store)
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
@@ -106,9 +141,10 @@ export const MapScreen = () => {
   const [route, setRoute]                   = useState<RouteInfo | null>(null);
   const [isRouting, setIsRouting]           = useState(false);
 
-  const activeRescueRef  = useRef<RescuePoint | null>(null);
-  const locationSubRef   = useRef<Location.LocationSubscription | null>(null);
-  const fetchRouteRef    = useRef<((dest: RescuePoint, showLoader?: boolean) => Promise<void>) | null>(null);
+  const activeRescueRef      = useRef<RescuePoint | null>(null);
+  const locationSubRef       = useRef<Location.LocationSubscription | null>(null);
+  const fetchRouteRef        = useRef<((dest: RescuePoint, showLoader?: boolean) => Promise<void>) | null>(null);
+  const lastRoutedLocationRef = useRef<{ latitude: number; longitude: number } | null>(null);
 
   const mapType  = mapStyle as MapType;
   const mapUiStyle = isDarkMode ? 'dark' : 'light';
@@ -171,6 +207,34 @@ export const MapScreen = () => {
       locationSubRef.current = null;
     };
   }, [shareLocation]);
+
+  // ── Danger zone detection — notify when user enters high/critical basin ──────
+  useEffect(() => {
+    if (!userLocation) return;
+    const dangerBasins = basins.filter(
+      (b) => b.riskLevel === 'critical' || b.riskLevel === 'high',
+    );
+    for (const basin of dangerBasins) {
+      const key = String(basin.hybasId);
+      if (notifiedZonesRef.current.has(key)) continue;
+      const poly = basinPolygons[key];
+      if (!poly) continue;
+      const inside = poly.parts.some((part) => isPointInPolygon(userLocation, part));
+      if (!inside) continue;
+      notifiedZonesRef.current.add(key);
+      const title = `Cảnh báo lũ: ${basin.province}`;
+      const body = `Bạn đang ở vùng ${RISK_LABELS[basin.riskLevel].toLowerCase()}. Xác suất lũ: ${(basin.floodProb * 100).toFixed(0)}%.`;
+      scheduleAlert(title, body);
+      addAlert({
+        id: `auto-${key}-${Date.now()}`,
+        title,
+        message: body,
+        isUrgent: basin.riskLevel === 'critical',
+        timestamp: new Date().toISOString(),
+        province: basin.province,
+      });
+    }
+  }, [userLocation, basins, scheduleAlert, addAlert]);
 
   // ── Load rescue points ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -257,19 +321,17 @@ export const MapScreen = () => {
     }
   }, [userLocation, shareLocation, navigation]);
 
-  // Keep ref in sync so the interval always calls the latest version
+  // Keep ref in sync so location effect always calls the latest version
   fetchRouteRef.current = fetchRoute;
 
-  // ── Re-fetch route every 30s when one is active ────────────────────────────
+  // ── Re-fetch route when user moves ≥30 m (navigation progress) ────────────
   useEffect(() => {
-    if (!route || !selectedRescue) return;
-    const interval = setInterval(() => {
-      if (activeRescueRef.current && fetchRouteRef.current) {
-        fetchRouteRef.current(activeRescueRef.current, false);
-      }
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, [route, selectedRescue]);
+    if (!route || !activeRescueRef.current || !userLocation) return;
+    const last = lastRoutedLocationRef.current;
+    if (last && haversineMeters(last, userLocation) < 30) return;
+    lastRoutedLocationRef.current = userLocation;
+    fetchRouteRef.current?.(activeRescueRef.current, false);
+  }, [userLocation, route]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleSelectSuggestion = (basin: BasinForecast) => {
@@ -331,6 +393,7 @@ export const MapScreen = () => {
     setRoute(null);
     setSelectedRescue(null);
     activeRescueRef.current = null;
+    lastRoutedLocationRef.current = null;
   };
 
   // Memoized so hundreds of polygons don't re-mount on every location tick / search keystroke
@@ -376,21 +439,6 @@ export const MapScreen = () => {
       }),
   [rescueRequests, themeColors, setSelectedRequest]);
 
-  // Memoized so custom-view markers don't re-render on location ticks
-  const rescueMarkers = useMemo(() =>
-    rescuePoints.map((point) => (
-      <Marker
-        key={`rescue-${point.id}`}
-        coordinate={{ latitude: point.lat, longitude: point.lon }}
-        onPress={() => handleSelectRescue(point)}
-        anchor={{ x: 0.5, y: 0.5 }}
-      >
-        <View style={styles.rescueMarker}>
-          <Ionicons name="medkit" size={14} color="#fff" />
-        </View>
-      </Marker>
-    )),
-  [rescuePoints, handleSelectRescue]);
 
   const panelFullOpen = (selectedBasin && !showSettings) || (selectedRescue != null && !panelCollapsed);
   const fabOffset = panelFullOpen ? 260 : (selectedRescue != null && panelCollapsed) ? 64 : Spacing.xl;
@@ -441,7 +489,14 @@ export const MapScreen = () => {
         {/* Rescue request pins (responder/admin only) */}
         {isResponder && showRescueRequests && requestMarkers}
 
-        {/* Rescue point markers — hidden for performance */}
+        {/* Selected evacuation point — default pin marker */}
+        {selectedRescue && (
+          <Marker
+            key={`selected-rescue-${selectedRescue.id}`}
+            coordinate={{ latitude: selectedRescue.lat, longitude: selectedRescue.lon }}
+            zIndex={100}
+          />
+        )}
       </MapView>
 
 
@@ -474,7 +529,6 @@ export const MapScreen = () => {
         <TouchableOpacity
           style={[GlobalStyles.mapMenuBtn, { backgroundColor: showSettings ? themeColors.primary : themeColors.card }]}
           onPress={() => {
-            LayoutAnimation.configureNext(LAYOUT_ANIM);
             setShowSettings((v) => !v);
             setShowSuggestions(false);
           }}
@@ -622,7 +676,7 @@ export const MapScreen = () => {
               </Text>
               {route && (
                 <Text style={[Typography.caption, { color: '#3b82f6', marginRight: Spacing.xs }]}>
-                  {route.distanceKm} km · {route.durationMin} phút
+                  {route.distanceKm} km
                 </Text>
               )}
               <Ionicons name="chevron-up" size={22} color={themeColors.textSecondary} />
@@ -663,7 +717,7 @@ export const MapScreen = () => {
                 <View style={styles.routeInfo}>
                   <Ionicons name="navigate" size={14} color="#3b82f6" />
                   <Text style={[Typography.body2, { color: '#3b82f6', marginLeft: 4 }]}>
-                    {route.distanceKm} km · {route.durationMin} phút
+                    {route.distanceKm} km
                   </Text>
                 </View>
               )}
@@ -703,23 +757,25 @@ export const MapScreen = () => {
         </View>
       )}
 
-      {/* ── Settings backdrop ── */}
-      {showSettings && (
+      {/* ── Map settings Modal (above tab bar + SOS button) ── */}
+      <Modal
+        visible={showSettings}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSettings(false)}
+        statusBarTranslucent
+      >
         <TouchableOpacity
-          style={GlobalStyles.mapBackdrop}
+          style={[GlobalStyles.mapBackdrop, { backgroundColor: 'transparent' }]}
           activeOpacity={1}
-          onPress={() => { LayoutAnimation.configureNext(LAYOUT_ANIM); setShowSettings(false); }}
+          onPress={() => setShowSettings(false)}
         />
-      )}
-
-      {/* ── Map settings bottom sheet ── */}
-      {showSettings && (
         <View style={[GlobalStyles.mapSettingsSheet, { backgroundColor: themeColors.card }]}>
           <View style={[GlobalStyles.mapSheetHandle, { backgroundColor: themeColors.border }]} />
 
           <View style={GlobalStyles.mapSheetHeader}>
             <Text style={[Typography.h3, { color: themeColors.text }]}>Cài đặt bản đồ</Text>
-            <TouchableOpacity onPress={() => { LayoutAnimation.configureNext(LAYOUT_ANIM); setShowSettings(false); }}>
+            <TouchableOpacity onPress={() => setShowSettings(false)}>
               <Text style={[Typography.body1, { color: themeColors.textSecondary }]}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -775,51 +831,17 @@ export const MapScreen = () => {
           <Text style={[GlobalStyles.mapSheetSectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
             LỚP BẢN ĐỒ
           </Text>
-          {[
-            { label: 'Lưu vực lũ',    sub: `${visibleBasins.length} lưu vực đang hiển thị`, active: true },
-            { label: 'Điểm cứu hộ',   sub: `${rescuePoints.length} điểm đang hiển thị`,     active: rescuePoints.length > 0 },
-            { label: 'Trạm đo mực nước', sub: 'Sắp ra mắt',                                 active: false },
-          ].map((layer, i, arr) => (
-            <View
-              key={layer.label}
-              style={[
-                GlobalStyles.mapLayerRow,
-                { borderBottomColor: themeColors.border },
-                i === arr.length - 1 && { borderBottomWidth: 0 },
-              ]}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[Typography.body1, { color: layer.active ? themeColors.text : themeColors.textSecondary }]}>
-                  {layer.label}
-                </Text>
-                <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: 2 }]}>
-                  {layer.sub}
-                </Text>
-              </View>
-              <View style={[GlobalStyles.mapLayerIndicator, { backgroundColor: layer.active ? themeColors.primary : themeColors.border }]} />
+          <View style={[GlobalStyles.mapLayerRow, { borderBottomColor: themeColors.border, borderBottomWidth: 0 }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[Typography.body1, { color: themeColors.text }]}>Lưu vực lũ</Text>
+              <Text style={[Typography.caption, { color: themeColors.textSecondary, marginTop: 2 }]}>
+                {visibleBasins.length} lưu vực đang hiển thị
+              </Text>
             </View>
-          ))}
-
-          <View style={[GlobalStyles.mapSheetDivider, { backgroundColor: themeColors.border }]} />
-          <Text style={[GlobalStyles.mapSheetSectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
-            CHÚ THÍCH MÀU SẮC
-          </Text>
-          <View style={GlobalStyles.mapLegendRow}>
-            {RISK_ORDER.map((risk) => (
-              <View key={risk} style={GlobalStyles.mapLegendItem}>
-                <View style={[GlobalStyles.mapLegendDot, { backgroundColor: RISK_COLORS[risk] }]} />
-                <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>
-                  {RISK_LABELS[risk]}
-                </Text>
-              </View>
-            ))}
-            <View style={GlobalStyles.mapLegendItem}>
-              <View style={[GlobalStyles.mapLegendDot, { backgroundColor: '#22c55e' }]} />
-              <Text style={[Typography.caption, { color: themeColors.textSecondary }]}>Cứu hộ</Text>
-            </View>
+            <View style={[GlobalStyles.mapLayerIndicator, { backgroundColor: themeColors.primary }]} />
           </View>
         </View>
-      )}
+      </Modal>
 
       {/* ── Request info card (tapping a rescue request pin) ── */}
       {selectedRequest && (
@@ -996,4 +1018,19 @@ const styles = StyleSheet.create({
   },
   statusDotReq: { width: 8, height: 8, borderRadius: 4 },
   reqCardPhoto: { width: 80, height: 80, borderRadius: 8, marginRight: Spacing.s },
+  selectedRescueMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 8,
+  },
 });

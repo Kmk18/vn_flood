@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, Switch, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -8,13 +8,13 @@ import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { Button } from '../components/Button';
 import { useAuthStore } from '../store/useAuthStore';
+import { useNotifications } from '../hooks/useNotifications';
 
 export const ProfileScreen = () => {
   const navigation = useNavigation<NavigationProp<any>>();
   const { isDarkMode, colors } = useTheme();
-
   const { user, isAuthenticated, logout } = useAuthStore();
-  const [pushNotifications, setPushNotifications] = useState(true);
+  const { enabled: pushEnabled, toggle: togglePush } = useNotifications();
 
   return (
     <SafeAreaView style={[GlobalStyles.container, { backgroundColor: colors.background }]}>
@@ -89,41 +89,7 @@ export const ProfileScreen = () => {
           </View>
         )}
 
-        {/* Settings section */}
-        <Text style={[styles.sectionLabel, Typography.label, { color: colors.textSecondary }]}>
-          CÀI ĐẶT
-        </Text>
-        <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-          <View style={[styles.fieldRow, styles.fieldRowCenter]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[Typography.body1, { color: colors.text }]}>Thông báo đẩy</Text>
-              <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                Nhận cảnh báo lũ khẩn cấp tức thì
-              </Text>
-            </View>
-            <Switch
-              value={pushNotifications}
-              onValueChange={setPushNotifications}
-              trackColor={{ false: colors.border, true: colors.primary }}
-            />
-          </View>
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <TouchableOpacity
-            style={[styles.fieldRow, styles.fieldRowCenter]}
-            onPress={() => navigation.navigate('AppSettings')}
-            activeOpacity={0.7}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={[Typography.body1, { color: colors.text }]}>Cài đặt ứng dụng</Text>
-              <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                Giao diện, chế độ tối và thông tin
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Role-based management links */}
+        {/* Role-based management links — above Settings */}
         {isAuthenticated && (user?.role === 'admin' || user?.role === 'responder') && (
           <>
             <Text style={[styles.sectionLabel, Typography.label, { color: colors.textSecondary }]}>
@@ -146,22 +112,20 @@ export const ProfileScreen = () => {
                     <Ionicons name="shield-outline" size={18} color={colors.primary} />
                   </TouchableOpacity>
                   <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  <TouchableOpacity
+                    style={[styles.fieldRow, styles.fieldRowCenter]}
+                    onPress={() => navigation.navigate('Authority')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[Typography.body1, { color: colors.text }]}>Quản lý cộng đồng</Text>
+                      <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                        Đăng thông báo, điểm sơ tán, cứu hộ
+                      </Text>
+                    </View>
+                    <Ionicons name="megaphone-outline" size={18} color={colors.primary} />
+                  </TouchableOpacity>
                 </>
-              )}
-              {user?.role === 'admin' && (
-                <TouchableOpacity
-                  style={[styles.fieldRow, styles.fieldRowCenter]}
-                  onPress={() => navigation.navigate('Authority')}
-                  activeOpacity={0.7}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[Typography.body1, { color: colors.text }]}>Quản lý cộng đồng</Text>
-                    <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                      Đăng thông báo, điểm sơ tán, cứu hộ
-                    </Text>
-                  </View>
-                  <Ionicons name="megaphone-outline" size={18} color={colors.primary} />
-                </TouchableOpacity>
               )}
               {user?.role === 'responder' && (
                 <TouchableOpacity
@@ -182,6 +146,40 @@ export const ProfileScreen = () => {
           </>
         )}
 
+        {/* Settings section */}
+        <Text style={[styles.sectionLabel, Typography.label, { color: colors.textSecondary }]}>
+          CÀI ĐẶT
+        </Text>
+        <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
+          <View style={[styles.fieldRow, styles.fieldRowCenter]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[Typography.body1, { color: colors.text }]}>Thông báo đẩy</Text>
+              <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                Nhận cảnh báo lũ khẩn cấp tức thì
+              </Text>
+            </View>
+            <Switch
+              value={pushEnabled}
+              onValueChange={togglePush}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <TouchableOpacity
+            style={[styles.fieldRow, styles.fieldRowCenter]}
+            onPress={() => navigation.navigate('AppSettings')}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[Typography.body1, { color: colors.text }]}>Cài đặt ứng dụng</Text>
+              <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                Giao diện, chế độ tối và thông tin
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
         {/* Auth action */}
         <View style={styles.authBtnWrap}>
           {isAuthenticated ? (
@@ -200,9 +198,7 @@ export const ProfileScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    paddingBottom: Spacing.xxl,
-  },
+  scrollContent: { paddingBottom: Spacing.xxl },
   header: {
     paddingHorizontal: Spacing.l,
     paddingTop: Spacing.xl,
@@ -230,9 +226,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.m,
     gap: Spacing.m,
   },
-  fieldRowCenter: {
-    alignItems: 'center',
-  },
+  fieldRowCenter: { alignItems: 'center' },
   divider: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: Spacing.l,
