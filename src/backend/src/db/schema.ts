@@ -114,6 +114,22 @@ export const officialAlerts = pgTable('official_alerts', {
   isActive: boolean('is_active').notNull().default(true),
 });
 
+export const alertReads = pgTable(
+  'alert_reads',
+  {
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    alertId: integer('alert_id').notNull().references(() => officialAlerts.id, { onDelete: 'cascade' }),
+    readAt: timestamp('read_at').notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.userId, t.alertId)],
+);
+
+export const pushTokens = pgTable('push_tokens', {
+  id: serial('id').primaryKey(),
+  token: varchar('token', { length: 500 }).notNull().unique(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 export const rescueRequests = pgTable('rescue_requests', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id),

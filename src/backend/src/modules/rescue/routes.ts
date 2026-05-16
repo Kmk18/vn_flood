@@ -121,6 +121,7 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
 
   // GET /api/rescue/requests — list requests (admin/responder only)
   // ?status=open|assigned|resolved  →  filter by that status
+  // ?status=all                     →  all statuses
   // no param                        →  open + assigned (for map overlay)
   app.get('/api/rescue/requests', requireAuth, async (req: Request, res: Response) => {
     if (req.user!.role === 'user') {
@@ -133,9 +134,9 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
         .select()
         .from(rescueRequests)
         .where(
-          status
-            ? eq(rescueRequests.status, status)
-            : inArray(rescueRequests.status, ['open', 'assigned'])
+          status === 'all' ? undefined
+          : status ? eq(rescueRequests.status, status)
+          : inArray(rescueRequests.status, ['open', 'assigned'])
         )
         .orderBy(sql`${rescueRequests.createdAt} desc`);
       res.json(data);

@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, users } from '../../db';
+import { db, users, pushTokens } from '../../db';
 import { requireAuth } from '../../middleware/requireAuth';
 
 const updateSchema = z.object({
@@ -53,5 +53,19 @@ export const registerUserRoutes = (app: Express) => {
   app.delete('/api/users/me', requireAuth, async (req: Request, res: Response) => {
     await db.delete(users).where(eq(users.id, req.user!.sub));
     res.status(204).send();
+  });
+
+  app.post('/api/users/push-token', async (req: Request, res: Response) => {
+    const { token } = req.body;
+    if (typeof token !== 'string' || !token.startsWith('ExponentPushToken[')) {
+      res.status(400).json({ error: 'Invalid token' }); return;
+    }
+    try {
+      await db.insert(pushTokens).values({ token }).onConflictDoNothing();
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[users] push-token:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 };

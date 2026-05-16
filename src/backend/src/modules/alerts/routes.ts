@@ -1,8 +1,28 @@
 import type { Express, Request, Response, NextFunction } from 'express';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, officialAlerts } from '../../db';
+import { db, officialAlerts, alertReads, pushTokens } from '../../db';
 import { requireAuth } from '../../middleware/requireAuth';
+
+// ─── Expo push notifications ─────────────────────────────────────────────────
+async function sendPushNotifications(title: string, body: string, alertId: number) {
+  const rows = await db.select({ token: pushTokens.token }).from(pushTokens);
+  const tokens = rows.map((r) => r.token);
+  console.log(`[push] sending to ${tokens.length} device(s) for alert ${alertId}`);
+  if (!tokens.length) return;
+  for (let i = 0; i < tokens.length; i += 100) {
+    const batch = tokens.slice(i, i + 100).map((to) => ({
+      to, title, body, sound: 'default', data: { alertId },
+    }));
+    const resp = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(batch),
+    });
+    const result = await resp.json();
+    console.log('[push] expo response:', JSON.stringify(result));
+  }
+}
 
 // ─── SSE broadcast (in-process, single instance) ─────────────────────────────
 // For multi-instance deployments (e.g. Cloud Run with min-instances > 1),
@@ -45,6 +65,49 @@ export const registerAlertsRoutes = (app: Express) => {
     }
   });
 
+  // GET read IDs for current user — authenticated
+  app.get('/api/official-alerts/reads', requireAuth, async (req, res) => {
+    const userId = req.user!.sub;
+    try {
+      const rows = await db
+        .select({ alertId: alertReads.alertId })
+        .from(alertReads)
+        .where(eq(alertReads.userId, userId));
+      res.json(rows.map((r) => r.alertId));
+    } catch (err) {
+      console.error('[alerts] reads:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST mark alert as read — authenticated
+  app.post('/api/official-alerts/:id/read', requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) { res.status(400).json({ error: 'Invalid id' }); return; }
+    const userId = req.user!.sub;
+    try {
+      await db.insert(alertReads).values({ userId, alertId: id }).onConflictDoNothing();
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[alerts] read:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // DELETE mark alert as unread — authenticated
+  app.delete('/api/official-alerts/:id/read', requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) { res.status(400).json({ error: 'Invalid id' }); return; }
+    const userId = req.user!.sub;
+    try {
+      await db.delete(alertReads).where(and(eq(alertReads.userId, userId), eq(alertReads.alertId, id)));
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[alerts] unread:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // GET SSE stream — public, long-lived
   app.get('/api/official-alerts/stream', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -77,6 +140,7 @@ export const registerAlertsRoutes = (app: Express) => {
         .returning();
       res.status(201).json(alert);
       broadcast({ type: 'new', data: alert });
+      sendPushNotifications(result.data.title, result.data.message, alert.id).catch(() => {});
     } catch (err) {
       console.error('[alerts] create:error', err);
       res.status(500).json({ error: 'Internal server error' });
