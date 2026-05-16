@@ -164,7 +164,7 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
     try {
       const [deleted] = await db.delete(rescuePoints).where(eq(rescuePoints.id, id)).returning();
       if (!deleted) { res.status(404).json({ error: 'Point not found' }); return; }
-      await redis.del('rescue:points');
+      redis.del('rescue:points').catch(() => {});
       res.json({ success: true });
     } catch (err) {
       console.error('[rescue] point:delete:error', err);
@@ -202,7 +202,7 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
 
     try {
       const [point] = await db.insert(rescuePoints).values(result.data).returning();
-      await redis.del('rescue:points');
+      redis.del('rescue:points').catch(() => {});
       log('point:created', { id: point.id, name: point.name });
       res.status(201).json(point);
     } catch (err) {
@@ -227,7 +227,7 @@ export const registerRescueRoutes = (app: Express, redis: Redis) => {
         .returning();
 
       if (!updated) { res.status(404).json({ error: 'Point not found' }); return; }
-      await redis.del('rescue:points');
+      redis.del('rescue:points').catch(() => {});
       res.json(updated);
     } catch (err) {
       console.error('[rescue] point:update:error', err);

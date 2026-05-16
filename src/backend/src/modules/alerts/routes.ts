@@ -4,11 +4,21 @@ import { z } from 'zod';
 import { db, officialAlerts } from '../../db';
 import { requireAuth } from '../../middleware/requireAuth';
 
-const requireAuthority = (req: Request, res: Response, next: NextFunction) => {
-  if (req.user!.role === 'user') {
-    res.status(403).json({ error: 'Forbidden' });
-    return;
+// ─── SSE broadcast (in-process, single instance) ─────────────────────────────
+// For multi-instance deployments (e.g. Cloud Run with min-instances > 1),
+// replace with Redis pub/sub so all instances share the broadcast.
+const sseClients = new Set<Response>();
+
+function broadcast(payload: object) {
+  const line = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const res of sseClients) {
+    try { res.write(line); } catch { sseClients.delete(res); }
   }
+}
+
+// ─── Auth guard ──────────────────────────────────────────────────────────────
+const requireAuthority = (req: Request, res: Response, next: NextFunction) => {
+  if (req.user!.role === 'user') { res.status(403).json({ error: 'Forbidden' }); return; }
   next();
 };
 
@@ -20,8 +30,8 @@ const createAlertSchema = z.object({
 });
 
 export const registerAlertsRoutes = (app: Express) => {
-  // GET /api/official-alerts — public, active alerts ordered newest first
-  app.get('/api/official-alerts', async (_req: Request, res: Response) => {
+  // GET list — public, newest first
+  app.get('/api/official-alerts', async (_req, res) => {
     try {
       const data = await db
         .select()
@@ -35,8 +45,28 @@ export const registerAlertsRoutes = (app: Express) => {
     }
   });
 
-  // POST /api/official-alerts — admin/responder only
-  app.post('/api/official-alerts', requireAuth, requireAuthority, async (req: Request, res: Response) => {
+  // GET SSE stream — public, long-lived
+  app.get('/api/official-alerts/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    sseClients.add(res);
+    res.write(': connected\n\n');
+
+    const heartbeat = setInterval(() => {
+      try { res.write(': keepalive\n\n'); } catch { /* client gone */ }
+    }, 25_000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      sseClients.delete(res);
+    });
+  });
+
+  // POST — admin/responder only
+  app.post('/api/official-alerts', requireAuth, requireAuthority, async (req, res) => {
     const result = createAlertSchema.safeParse(req.body);
     if (!result.success) { res.status(400).json({ error: result.error.issues }); return; }
 
@@ -46,14 +76,15 @@ export const registerAlertsRoutes = (app: Express) => {
         .values({ ...result.data, postedBy: req.user!.sub })
         .returning();
       res.status(201).json(alert);
+      broadcast({ type: 'new', data: alert });
     } catch (err) {
       console.error('[alerts] create:error', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
 
-  // DELETE /api/official-alerts/:id — admin/responder only (soft-delete)
-  app.delete('/api/official-alerts/:id', requireAuth, requireAuthority, async (req: Request, res: Response) => {
+  // DELETE (soft) — admin/responder only
+  app.delete('/api/official-alerts/:id', requireAuth, requireAuthority, async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) { res.status(400).json({ error: 'Invalid id' }); return; }
 
@@ -66,6 +97,7 @@ export const registerAlertsRoutes = (app: Express) => {
 
       if (!updated) { res.status(404).json({ error: 'Alert not found' }); return; }
       res.json({ success: true });
+      broadcast({ type: 'delete', id });
     } catch (err) {
       console.error('[alerts] delete:error', err);
       res.status(500).json({ error: 'Internal server error' });

@@ -2,7 +2,9 @@ import Redis from 'ioredis';
 
 export const createRedisClient = () => {
   const url = process.env.REDIS_URL || 'redis://localhost:6379';
+  const tls = url.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined;
   const client = new Redis(url, {
+    tls,
     lazyConnect: true,
     enableOfflineQueue: false,
     retryStrategy: (times) => {
