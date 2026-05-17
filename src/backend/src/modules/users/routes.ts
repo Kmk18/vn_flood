@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, users, pushTokens } from '../../db';
 import { requireAuth } from '../../middleware/requireAuth';
+import { hashPassword, verifyPassword } from '../../lib/password';
 
 const updateSchema = z.object({
   name:     z.string().min(1).max(100).optional(),
@@ -10,6 +11,11 @@ const updateSchema = z.object({
   phone:    z.string().regex(/^[0-9+\s\-().]{7,20}$/, 'Số điện thoại không hợp lệ').optional(),
   address:  z.string().min(1).max(255).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'At least one field required' });
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword:     z.string().min(8, 'Password must be at least 8 characters'),
+});
 
 const USER_SELECT = {
   id:        users.id,
@@ -63,6 +69,35 @@ export const registerUserRoutes = (app: Express) => {
   app.delete('/api/users/me', requireAuth, async (req: Request, res: Response) => {
     await db.delete(users).where(eq(users.id, req.user!.sub));
     res.status(204).send();
+  });
+
+  app.patch('/api/users/me/password', requireAuth, async (req: Request, res: Response) => {
+    const result = changePasswordSchema.safeParse(req.body);
+    if (!result.success) {
+      res.status(400).json({ error: result.error.issues });
+      return;
+    }
+    const { currentPassword, newPassword } = result.data;
+
+    try {
+      const [user] = await db
+        .select({ id: users.id, passwordHash: users.passwordHash })
+        .from(users)
+        .where(eq(users.id, req.user!.sub))
+        .limit(1);
+
+      if (!user || !(await verifyPassword(currentPassword, user.passwordHash))) {
+        res.status(401).json({ error: 'Mật khẩu hiện tại không đúng' });
+        return;
+      }
+
+      const passwordHash = await hashPassword(newPassword);
+      await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, req.user!.sub));
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[users] password:change:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 
   app.post('/api/users/push-token', async (req: Request, res: Response) => {
