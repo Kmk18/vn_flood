@@ -46,7 +46,7 @@ export const registerAdminRoutes = (app: Express) => {
     const offset = Math.max(0, parseInt(String(req.query.offset ?? '0'), 10));
 
     try {
-      const query = db
+      const base = db
         .select({
           id: users.id,
           email: users.email,
@@ -55,14 +55,15 @@ export const registerAdminRoutes = (app: Express) => {
           province: users.province,
           createdAt: users.createdAt,
         })
-        .from(users)
+        .from(users);
+
+      const data = await (search
+        ? base.where(or(ilike(users.name, `%${search}%`), ilike(users.email, `%${search}%`)))
+        : base
+      )
         .orderBy(sql`${users.createdAt} desc`)
         .limit(50)
         .offset(offset);
-
-      const data = search
-        ? await query.where(or(ilike(users.name, `%${search}%`), ilike(users.email, `%${search}%`)))
-        : await query;
 
       res.json(data);
     } catch (err) {

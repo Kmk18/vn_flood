@@ -23,7 +23,17 @@ const port = process.env.PORT || 4000;
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
-app.use(cors());
+app.set('trust proxy', 1);
+
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : false,
+  credentials: true,
+}));
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir));
 

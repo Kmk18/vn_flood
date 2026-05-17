@@ -1,0 +1,36 @@
+# Kiểm thử riêng cho Chat AI (Gemini) — tải thấp hơn do external API
+config:
+  target: "https://vnflood-backend-lkpg4zh6za-as.a.run.app"
+
+  phases:
+    - name: "Warm-up"
+      duration: 10
+      arrivalRate: 1
+    - name: "Sustained"
+      duration: 60
+      arrivalRate: 3
+    - name: "Peak"
+      duration: 20
+      arrivalRate: 5
+
+  defaults:
+    headers:
+      Accept: "application/json"
+      Content-Type: "application/json"
+
+  ensure:
+    p95: 8000       # Chat chậm hơn do Gemini API, cho phép 8 s
+    maxErrorRate: 2
+
+scenarios:
+  - name: "POST /api/chat"
+    weight: 100
+    flow:
+      - post:
+          url: "/api/chat"
+          json:
+            message: "Tình hình lũ lụt ở miền Trung như thế nào?"
+          expect:
+            - statusCode: 200
+            - hasProperty: "reply"
+            - hasProperty: "sources"

@@ -1,0 +1,83 @@
+config:
+  target: "https://vnflood-backend-lkpg4zh6za-as.a.run.app"
+  # Biến môi trường: chạy với --dotenv artillery/.env.artillery
+  environments:
+    local:
+      target: "http://localhost:4000"
+
+  phases:
+    # Warm-up: 10 giây, 5 req/s
+    - name: "Warm-up"
+      duration: 10
+      arrivalRate: 5
+    # Tăng dần: 30 giây từ 5 → 30 req/s
+    - name: "Ramp-up"
+      duration: 30
+      arrivalRate: 5
+      rampTo: 30
+    # Duy trì tải: 60 giây, 30 req/s
+    - name: "Sustained load"
+      duration: 60
+      arrivalRate: 30
+    # Tải đỉnh: 30 giây, 50 req/s
+    - name: "Peak load"
+      duration: 30
+      arrivalRate: 50
+
+  defaults:
+    headers:
+      Accept: "application/json"
+      Content-Type: "application/json"
+
+  # Ngưỡng fail nếu vượt quá
+  ensure:
+    p95: 500       # p95 phải < 500 ms
+    maxErrorRate: 1 # Tỷ lệ lỗi < 1%
+
+scenarios:
+  # ── P-1: Lấy danh sách cảnh báo (public, không cần auth) ──────────────
+  - name: "GET /api/official-alerts (public)"
+    weight: 25
+    flow:
+      - get:
+          url: "/api/official-alerts"
+          expect:
+            - statusCode: 200
+
+  # ── P-2: Dự báo lũ hôm nay (public, Redis cached) ─────────────────────
+  - name: "GET /api/flood/predictions/today (cached)"
+    weight: 25
+    flow:
+      - get:
+          url: "/api/flood/predictions/today?risk_min=low"
+          expect:
+            - statusCode: 200
+
+  # ── P-3: Điểm cứu hộ (public, Redis cached) ───────────────────────────
+  - name: "GET /api/rescue/points (cached)"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/rescue/points"
+          expect:
+            - statusCode: 200
+
+  # ── P-4: Thông tin người dùng (cần JWT) ───────────────────────────────
+  - name: "GET /api/users/me (authenticated)"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/users/me"
+          headers:
+            Authorization: "Bearer {{ $env.TEST_TOKEN }}"
+          expect:
+            - statusCode: 200
+
+  # ── P-5: Health check ─────────────────────────────────────────────────
+  - name: "GET /api/health"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/health"
+          expect:
+            - statusCode: 200

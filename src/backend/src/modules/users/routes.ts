@@ -24,14 +24,19 @@ const USER_SELECT = {
 
 export const registerUserRoutes = (app: Express) => {
   app.get('/api/users/me', requireAuth, async (req: Request, res: Response) => {
-    const [user] = await db
-      .select(USER_SELECT)
-      .from(users)
-      .where(eq(users.id, req.user!.sub))
-      .limit(1);
+    try {
+      const [user] = await db
+        .select(USER_SELECT)
+        .from(users)
+        .where(eq(users.id, req.user!.sub))
+        .limit(1);
 
-    if (!user) { res.status(404).json({ error: 'User not found' }); return; }
-    res.json(user);
+      if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+      res.json(user);
+    } catch (err) {
+      console.error('[users] me:get:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 
   app.patch('/api/users/me', requireAuth, async (req: Request, res: Response) => {
@@ -41,13 +46,18 @@ export const registerUserRoutes = (app: Express) => {
       return;
     }
 
-    const [user] = await db
-      .update(users)
-      .set({ ...result.data, updatedAt: new Date() })
-      .where(eq(users.id, req.user!.sub))
-      .returning(USER_SELECT);
+    try {
+      const [user] = await db
+        .update(users)
+        .set({ ...result.data, updatedAt: new Date() })
+        .where(eq(users.id, req.user!.sub))
+        .returning(USER_SELECT);
 
-    res.json(user);
+      res.json(user);
+    } catch (err) {
+      console.error('[users] me:patch:error', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 
   app.delete('/api/users/me', requireAuth, async (req: Request, res: Response) => {
@@ -57,7 +67,7 @@ export const registerUserRoutes = (app: Express) => {
 
   app.post('/api/users/push-token', async (req: Request, res: Response) => {
     const { token } = req.body;
-    if (typeof token !== 'string' || !token.startsWith('ExponentPushToken[')) {
+    if (typeof token !== 'string' || token.length < 10) {
       res.status(400).json({ error: 'Invalid token' }); return;
     }
     try {

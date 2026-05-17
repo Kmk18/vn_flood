@@ -3,24 +3,24 @@ import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, officialAlerts, alertReads, pushTokens } from '../../db';
 import { requireAuth } from '../../middleware/requireAuth';
+import { getMessaging } from '../../lib/firebase';
 
-// ─── Expo push notifications ─────────────────────────────────────────────────
-async function sendPushNotifications(title: string, body: string, alertId: number) {
+// ─── FCM push via Firebase Admin SDK ─────────────────────────────────────────
+async function sendFcmPush(title: string, body: string) {
+  const messaging = getMessaging();
+  if (!messaging) return;
+
   const rows = await db.select({ token: pushTokens.token }).from(pushTokens);
+  if (!rows.length) return;
+
   const tokens = rows.map((r) => r.token);
-  console.log(`[push] sending to ${tokens.length} device(s) for alert ${alertId}`);
-  if (!tokens.length) return;
-  for (let i = 0; i < tokens.length; i += 100) {
-    const batch = tokens.slice(i, i + 100).map((to) => ({
-      to, title, body, sound: 'default', data: { alertId },
-    }));
-    const resp = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(batch),
-    });
-    const result = await resp.json();
-    console.log('[push] expo response:', JSON.stringify(result));
+  // FCM multicast accepts up to 500 tokens per call
+  for (let i = 0; i < tokens.length; i += 500) {
+    messaging.sendEachForMulticast({
+      tokens: tokens.slice(i, i + 500),
+      notification: { title, body },
+      android: { priority: 'high' },
+    }).catch((err) => console.error('[push] fcm error:', err));
   }
 }
 
@@ -140,7 +140,7 @@ export const registerAlertsRoutes = (app: Express) => {
         .returning();
       res.status(201).json(alert);
       broadcast({ type: 'new', data: alert });
-      sendPushNotifications(result.data.title, result.data.message, alert.id).catch(() => {});
+      sendFcmPush(result.data.title, result.data.message).catch(() => {});
     } catch (err) {
       console.error('[alerts] create:error', err);
       res.status(500).json({ error: 'Internal server error' });

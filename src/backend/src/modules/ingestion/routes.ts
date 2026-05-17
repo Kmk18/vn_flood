@@ -39,7 +39,7 @@ const PREDICTION_CACHE_KEYS = [
 export const registerIngestionRoutes = (app: Express, redis: Redis) => {
   app.post('/api/internal/ingest', async (req: Request, res: Response) => {
     const secret = process.env.INGEST_SECRET;
-    if (secret && req.headers['x-ingest-secret'] !== secret) {
+    if (!secret || req.headers['x-ingest-secret'] !== secret) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
