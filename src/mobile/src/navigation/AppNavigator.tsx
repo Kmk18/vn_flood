@@ -6,6 +6,7 @@ import { TabNavigator } from './TabNavigator';
 import { AuthNavigator } from './AuthNavigator';
 import { RescueModeScreen } from '../screens/RescueModeScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
+import { ChangePasswordScreen } from '../screens/ChangePasswordScreen';
 import { AppSettingsScreen } from '../screens/AppSettingsScreen';
 import { AdminScreen } from '../screens/AdminScreen';
 import { AuthorityScreen } from '../screens/AuthorityScreen';
@@ -66,6 +67,7 @@ export const AppNavigator = () => {
         <Stack.Screen name="Auth" component={AuthNavigator} />
         <Stack.Screen name="RescueMode" component={RescueModeScreen} options={{ presentation: 'modal' }} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
         <Stack.Screen name="AppSettings" component={AppSettingsScreen} />
         <Stack.Screen name="Admin" component={AdminScreen} />
         <Stack.Screen name="Authority" component={AuthorityScreen} />

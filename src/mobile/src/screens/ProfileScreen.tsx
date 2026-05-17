@@ -86,6 +86,13 @@ export const ProfileScreen = () => {
               onPress={() => navigation.navigate('EditProfile')}
               isDarkMode={isDarkMode}
             />
+            <Button
+              title="Đổi mật khẩu"
+              variant="secondary"
+              onPress={() => navigation.navigate('ChangePassword')}
+              isDarkMode={isDarkMode}
+              style={{ marginTop: Spacing.s }}
+            />
           </View>
         )}
 
