@@ -10,6 +10,7 @@ import { Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { useTheme } from '../theme/useTheme';
 import { chatApi } from '../api/chat';
+import { useAuthStore } from '../store/useAuthStore';
 
 export const CHAT_HISTORY_KEY = 'chat_history';
 
@@ -98,11 +99,23 @@ const GREETING: Message = { id: '0', text: 'Xin chào! Tôi là trợ lý VNFloo
 export const ChatbotScreen = () => {
   const { isDarkMode, colors } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const prevUserIdRef = useRef<number | null>(null);
 
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([GREETING]);
   const hasSentMessage = messages.length > 1;
+
+  // Clear in-memory history on logout or account switch.
+  // Only triggers when we HAD a user (prevId !== null) and the user changed.
+  useEffect(() => {
+    const prevId = prevUserIdRef.current;
+    prevUserIdRef.current = userId;
+    if (prevId !== null && prevId !== userId) {
+      setMessages([GREETING]);
+    }
+  }, [userId]);
 
   useEffect(() => {
     SecureStore.getItemAsync(CHAT_HISTORY_KEY)

@@ -226,6 +226,11 @@ export const MapScreen = () => {
     }
   }, [userLocation, basins, scheduleAlert, addAlert]);
 
+  // ── Cleanup debounce on unmount ────────────────────────────────────────────
+  useEffect(() => {
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, []);
+
   // ── Load rescue points ─────────────────────────────────────────────────────
   useEffect(() => {
     rescueApi.getPoints().then(setRescuePoints).catch(() => {});
@@ -236,8 +241,6 @@ export const MapScreen = () => {
     if (!isResponder) return;
     rescueApi.getAllRequests().then(setRescueRequests).catch(() => {});
   }, [isResponder]);
-
-  useEffect(() => { loadRescueRequests(); }, [loadRescueRequests]);
 
   // On focus: refresh requests + handle accepted request routed back from ResponderScreen
   useFocusEffect(useCallback(() => { loadRescueRequests(); }, [loadRescueRequests]));

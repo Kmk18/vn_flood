@@ -57,6 +57,7 @@ api.interceptors.response.use(
         const { data } = await axios.post(`${API_URL}/api/auth/refresh`, { refreshToken });
         _cachedToken = data.accessToken;
         await SecureStore.setItemAsync(ACCESS_KEY, data.accessToken);
+        if (data.refreshToken) await SecureStore.setItemAsync(REFRESH_KEY, data.refreshToken);
         original.headers.Authorization = `Bearer ${data.accessToken}`;
         return api(original);
       } catch {

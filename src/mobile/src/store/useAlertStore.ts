@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { officialAlertsApi, subscribeToAlerts } from '../api/officialAlerts';
+import { scheduleLocalNotification } from '../hooks/useNotifications';
 
 export interface Alert {
   id: string;
@@ -90,14 +91,17 @@ export const useAlertStore = create<AlertState>((set, get) => ({
     _sseCleanup?.();
     const { addAlert, removeAlert } = get();
     _sseCleanup = subscribeToAlerts(
-      (raw) => addAlert({
-        id: String(raw.id),
-        title: raw.title,
-        message: raw.message,
-        isUrgent: raw.isUrgent,
-        timestamp: raw.createdAt,
-        province: raw.province,
-      }),
+      (raw) => {
+        addAlert({
+          id: String(raw.id),
+          title: raw.title,
+          message: raw.message,
+          isUrgent: raw.isUrgent,
+          timestamp: raw.createdAt,
+          province: raw.province,
+        });
+        scheduleLocalNotification(raw.title, raw.message).catch(() => {});
+      },
       (id) => removeAlert(String(id)),
     );
   },

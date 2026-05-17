@@ -4,11 +4,11 @@
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/vnflood_logo.png",
+    "icon": "./assets/vnflood_icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/vnflood_logo.png",
+      "image": "./assets/vnflood_icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/vnflood_logo.png",
+        "foregroundImage": "./assets/vnflood_icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -37,7 +37,7 @@
       }
     },
     "web": {
-      "favicon": "./assets/vnflood_logo.png"
+      "favicon": "./assets/vnflood_icon.png"
     },
     "plugins": [
       "expo-secure-store",
@@ -50,7 +50,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/vnflood_logo.png",
+          "icon": "./assets/vnflood_icon.png",
           "color": "#1B4FDB"
         }
       ]

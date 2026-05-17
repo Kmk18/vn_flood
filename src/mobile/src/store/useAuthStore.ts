@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { authApi } from '../api/auth';
 import { usersApi } from '../api/users';
-import { saveTokens, clearTokens, getAccessToken } from '../api/client';
+import { saveTokens, clearTokens, getAccessToken, getRefreshToken, API_URL } from '../api/client';
 import { CHAT_HISTORY_KEY } from '../screens/ChatbotScreen';
 
 export interface User {
@@ -80,6 +80,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     set((state) => ({ user: state.user ? { ...state.user, ...updated } : null })),
 
   logout: async () => {
+    const refreshToken = await getRefreshToken();
+    if (refreshToken) {
+      fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      }).catch(() => {});
+    }
     await Promise.all([
       clearTokens(),
       SecureStore.deleteItemAsync(CHAT_HISTORY_KEY).catch(() => {}),

@@ -15,4 +15,12 @@ config.resolver.nodeModulesPaths = [
 
 config.resolver.disableHierarchicalLookup = true;
 
+// @expo/metro-config sets unstable_serverRoot to the monorepo root for web
+// monorepo support, but this breaks Android entry file resolution. Force it
+// back to the mobile project root so Metro resolves ./index.ts correctly.
+config.server = {
+  ...config.server,
+  unstable_serverRoot: projectRoot,
+};
+
 module.exports = config;
