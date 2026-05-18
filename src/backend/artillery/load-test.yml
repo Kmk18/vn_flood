@@ -23,16 +23,33 @@ config:
     - name: "Peak load"
       duration: 30
       arrivalRate: 50
+    # Stress: tăng từ 50 → 200 req/s để tìm điểm gãy
+    - name: "Stress ramp"
+      duration: 60
+      arrivalRate: 50
+      rampTo: 200
+    # Duy trì stress: 60 giây ở 200 req/s
+    - name: "Stress sustained"
+      duration: 60
+      arrivalRate: 200
+    # Spike: tăng đột biến lên 500 req/s trong 20 giây
+    - name: "Spike"
+      duration: 20
+      arrivalRate: 500
+    # Recovery: giảm về 30 req/s, kiểm tra hệ thống phục hồi
+    - name: "Recovery"
+      duration: 30
+      arrivalRate: 30
 
   defaults:
     headers:
       Accept: "application/json"
       Content-Type: "application/json"
 
-  # Ngưỡng fail nếu vượt quá
+  # Ngưỡng fail — nới rộng vì stress/spike được phép có lỗi nhiều hơn
   ensure:
-    p95: 500       # p95 phải < 500 ms
-    maxErrorRate: 1 # Tỷ lệ lỗi < 1%
+    p95: 2000      # p95 < 2s (stress có thể chậm hơn)
+    maxErrorRate: 5 # Cho phép tối đa 5% lỗi trong toàn bộ test
 
 scenarios:
   # ── P-1: Lấy danh sách cảnh báo (public, không cần auth) ──────────────

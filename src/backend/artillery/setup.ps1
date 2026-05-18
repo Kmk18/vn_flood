@@ -23,4 +23,10 @@ Write-Host "Token   : $TOKEN"
 "TEST_PASS=$PASS"     | Add-Content -Path "$PSScriptRoot\.env.artillery"
 
 Write-Host "`n=== Token đã lưu vào artillery/.env.artillery ===" -ForegroundColor Green
-Write-Host "Chạy load test: artillery run artillery\load-test.yml --dotenv artillery\.env.artillery"
+Write-Host "QUAN TRỌNG: Token hết hạn sau 15 phút — chạy test ngay bây giờ!" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Load + stress test:" -ForegroundColor Cyan
+Write-Host "  artillery run --dotenv artillery\.env.artillery artillery\load-test.yml --output artillery\load-test-report.json"
+Write-Host ""
+Write-Host "Chat test (chạy riêng):" -ForegroundColor Cyan
+Write-Host "  artillery run artillery\chat-test.yml"
