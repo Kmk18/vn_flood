@@ -4,6 +4,7 @@ import { authApi } from '../api/auth';
 import { usersApi } from '../api/users';
 import { saveTokens, clearTokens, getAccessToken, getRefreshToken, API_URL } from '../api/client';
 import { CHAT_HISTORY_KEY } from '../screens/ChatbotScreen';
+import { useAlertStore } from './useAlertStore';
 
 export interface User {
   id: number;
@@ -37,6 +38,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (!token) return;
       const user = await usersApi.getMe();
       set({ isAuthenticated: true, user });
+      // Re-fetch with valid token so server read state overwrites any guest state
+      useAlertStore.getState().fetchAlerts();
     } catch {
       await clearTokens();
     }
@@ -48,6 +51,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       const data = await authApi.login(email, password);
       await saveTokens(data.accessToken, data.refreshToken);
       set({ isAuthenticated: true, user: data.user, isLoading: false });
+      const { resetReadIds, fetchAlerts } = useAlertStore.getState();
+      resetReadIds();
+      fetchAlerts();
       return { success: true };
     } catch (err: any) {
       set({ isLoading: false });
@@ -65,6 +71,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       const data = await authApi.register(email, password, name);
       await saveTokens(data.accessToken, data.refreshToken);
       set({ isAuthenticated: true, user: data.user, isLoading: false });
+      const { resetReadIds, fetchAlerts } = useAlertStore.getState();
+      resetReadIds();
+      fetchAlerts();
       return { success: true };
     } catch (err: any) {
       set({ isLoading: false });
@@ -93,5 +102,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       SecureStore.deleteItemAsync(CHAT_HISTORY_KEY).catch(() => {}),
     ]);
     set({ isAuthenticated: false, user: null });
+    // Re-fetch unauthenticated — restores persisted guest read state from SecureStore
+    useAlertStore.getState().fetchAlerts();
   },
 }));

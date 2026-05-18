@@ -413,9 +413,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
                     shelter.address || shelter.province,
                     shelter.capacity ? `${shelter.capacity} người` : null,
                     shelter.distKm !== Infinity
-                      ? shelter.isRoad
-                        ? `${fmtDist(shelter.distKm)}${shelter.durationMin ? ` · ${shelter.durationMin} phút` : ''}`
-                        : `~${fmtDist(shelter.distKm)}`
+                      ? shelter.isRoad ? fmtDist(shelter.distKm) : `~${fmtDist(shelter.distKm)}`
                       : null,
                   ].filter(Boolean).join(' · ')}
                 </Text>

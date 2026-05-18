@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, TabActions } from '@react-navigation/native';
 import { MapScreen } from '../screens/MapScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { ChatbotScreen } from '../screens/ChatbotScreen';
@@ -65,6 +65,7 @@ export const TabNavigator = () => {
   const handleShelterSelect = (shelter: RescuePoint) => {
     setPendingNav({ id: shelter.id, lat: shelter.lat, lon: shelter.lon, label: shelter.name });
     setRescueOpen(false);
+    navigation.dispatch(TabActions.jumpTo('Bản đồ'));
   };
 
   return (

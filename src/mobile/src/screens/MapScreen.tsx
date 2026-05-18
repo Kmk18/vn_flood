@@ -108,7 +108,7 @@ interface RouteInfo {
 export const MapScreen = () => {
   const navigation = useNavigation();
   const { isDarkMode, colors: themeColors } = useTheme();
-  const { basins, selectedBasin, filterMinRisk, isLoading, fetchData, setSelectedBasin, setFilterMinRisk } = useFloodStore();
+  const { basins, selectedBasin, visibleRisks, isLoading, fetchData, setSelectedBasin, toggleVisibleRisk } = useFloodStore();
   const user = useAuthStore((s) => s.user);
   const isResponder = user?.role === 'responder' || user?.role === 'admin';
   const { pendingNav, setPendingNav } = useResponderStore();
@@ -128,6 +128,7 @@ export const MapScreen = () => {
   const [searchedLocation, setSearchedLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestIdRef = useRef(0);
   const [showSettings, setShowSettings] = useState(false);
   const [mapStyle, setMapStyle]         = useState<MapStyleId>('standard');
 
@@ -154,11 +155,10 @@ export const MapScreen = () => {
 
   const mapType  = mapStyle as MapType;
   const mapUiStyle = isDarkMode ? 'dark' : 'light';
-  const minOrder = RISK_ORDER.indexOf(filterMinRisk);
 
   const visibleBasins = useMemo(
-    () => basins.filter((b) => RISK_ORDER.indexOf(b.riskLevel) >= minOrder),
-    [basins, minOrder],
+    () => basins.filter((b) => visibleRisks.has(b.riskLevel)),
+    [basins, visibleRisks],
   );
 
 
@@ -404,22 +404,22 @@ export const MapScreen = () => {
     Object.entries(basinPolygons).map(([id, poly]) => {
       const basin = basinMap.get(id);
       if (!basin) return null;
-      if (RISK_ORDER.indexOf(basin.riskLevel) < minOrder) return null;
+      if (!visibleRisks.has(basin.riskLevel)) return null;
 
-      const fill   = RISK_COLORS_ALPHA[basin.riskLevel];
-      const stroke = RISK_COLORS[basin.riskLevel];
+      const fill = RISK_COLORS_ALPHA[basin.riskLevel];
+      const isLow = basin.riskLevel === 'low';
 
       return poly.parts.map((coords, i) => (
         <Polygon
           key={`${id}-${i}`}
           coordinates={coords}
           fillColor={fill}
-          strokeColor={stroke}
-          strokeWidth={1.5}
+          strokeColor={isLow ? 'transparent' : RISK_COLORS[basin.riskLevel]}
+          strokeWidth={isLow ? 0 : 1.5}
         />
       ));
     }),
-  [basinMap, minOrder]); // no onPress — polygons are display-only
+  [basinMap, visibleRisks]); // no onPress — polygons are display-only
 
   // Rescue request pins for responder/admin
   const requestMarkers = useMemo(() =>
@@ -529,7 +529,14 @@ export const MapScreen = () => {
             onChangeText={(t) => {
               setSearchQuery(t);
               if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-              if (!t) { setShowSuggestions(false); setPlaceSuggestions([]); setSearchedLocation(null); return; }
+              if (!t) {
+                searchRequestIdRef.current++;
+                setShowSuggestions(false);
+                setPlaceSuggestions([]);
+                setSearchedLocation(null);
+                return;
+              }
+              const reqId = ++searchRequestIdRef.current;
               searchDebounceRef.current = setTimeout(async () => {
                 setGeoLoading(true);
                 try {
@@ -537,7 +544,9 @@ export const MapScreen = () => {
                     `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(t)}&format=json&limit=5&addressdetails=1&accept-language=vi&countrycodes=vn`,
                     { headers: { 'User-Agent': 'VNFloodApp/1.0' } },
                   );
-                  setPlaceSuggestions(await res.json());
+                  const data = await res.json();
+                  if (reqId !== searchRequestIdRef.current) return;
+                  setPlaceSuggestions(data);
                   setShowSuggestions(true);
                 } catch {}
                 setGeoLoading(false);
@@ -547,7 +556,7 @@ export const MapScreen = () => {
             returnKeyType="search"
           />
           {searchQuery.length > 0 && !geoLoading && (
-            <TouchableOpacity onPress={() => { setSearchQuery(''); setShowSuggestions(false); setPlaceSuggestions([]); setSearchedLocation(null); }}>
+            <TouchableOpacity onPress={() => { searchRequestIdRef.current++; setSearchQuery(''); setShowSuggestions(false); setPlaceSuggestions([]); setSearchedLocation(null); }}>
               <Text style={[GlobalStyles.mapClearBtn, { color: themeColors.textSecondary }]}>✕</Text>
             </TouchableOpacity>
           )}
@@ -817,20 +826,20 @@ export const MapScreen = () => {
 
           <View style={[GlobalStyles.mapSheetDivider, { backgroundColor: themeColors.border }]} />
           <Text style={[GlobalStyles.mapSheetSectionLabel, Typography.label, { color: themeColors.textSecondary }]}>
-            HIỂN THỊ TỪ MỨC RỦI RO
+            HIỂN THỊ MỨC RỦI RO
           </Text>
           <View style={GlobalStyles.mapRiskRow}>
-            {(RISK_ORDER.filter((r) => r !== 'low') as Exclude<RiskLevel, 'low'>[]).map((risk) => {
-              const active = filterMinRisk === risk;
+            {RISK_ORDER.map((risk) => {
+              const active = visibleRisks.has(risk);
               return (
                 <TouchableOpacity
                   key={risk}
-                  onPress={() => setFilterMinRisk(risk as Exclude<RiskLevel, 'low'>)}
+                  onPress={() => toggleVisibleRisk(risk)}
                   style={[GlobalStyles.mapRiskChip, { backgroundColor: active ? RISK_COLORS[risk] : themeColors.secondary }]}
                 >
                   <View style={[GlobalStyles.mapRiskDot, { backgroundColor: active ? '#fff' : RISK_COLORS[risk] }]} />
                   <Text style={[Typography.body2, { color: active ? '#fff' : themeColors.text, fontWeight: active ? '700' : '400' }]}>
-                    {RISK_LABELS[risk as RiskLevel]}+
+                    {RISK_LABELS[risk]}
                   </Text>
                 </TouchableOpacity>
               );

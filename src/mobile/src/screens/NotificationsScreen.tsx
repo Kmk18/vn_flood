@@ -52,7 +52,7 @@ export const NotificationsScreen = () => {
     return (
       <TouchableOpacity
         key={item.id}
-        style={[styles.alertCard, { backgroundColor: colors.card }]}
+        style={styles.alertCard}
         onPress={() => handlePress(item, canExpand)}
         activeOpacity={0.85}
       >
@@ -145,7 +145,12 @@ export const NotificationsScreen = () => {
             Không có thông báo nào.
           </Text>
         ) : (
-          alerts.map(renderAlert)
+          alerts.map((item, idx) => (
+            <React.Fragment key={item.id}>
+              {idx > 0 && <View style={[styles.separator, { backgroundColor: colors.border }]} />}
+              {renderAlert(item)}
+            </React.Fragment>
+          ))
         )}
       </ScrollView>
     </SafeAreaView>
@@ -162,23 +167,18 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.m,
   },
   list: {
-    paddingHorizontal: Spacing.m,
-    paddingTop: Spacing.m,
     paddingBottom: Spacing.xl,
-    gap: Spacing.s,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: Spacing.m + 4,
   },
   alertCard: {
-    borderRadius: 12,
     overflow: 'hidden',
     flexDirection: 'row',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
   },
   accent: { width: 4 },
-  cardInner: { flex: 1, padding: Spacing.m },
+  cardInner: { flex: 1, paddingHorizontal: Spacing.m, paddingVertical: Spacing.m },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -211,7 +211,7 @@ export const ChatbotScreen = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <Text style={[Typography.h1, { color: colors.text }]}>Trợ lý</Text>
+          <Text style={[Typography.h1, { color: colors.text }]}>Trợ lý AI</Text>
           <View style={styles.statusBadge}>
             <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
             <Text style={[Typography.caption, { color: colors.success }]}>Đang hoạt động</Text>
