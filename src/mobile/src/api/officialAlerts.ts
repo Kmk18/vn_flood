@@ -44,6 +44,9 @@ function parseSSEChunk(chunk: string, onEvent: (e: SSEEvent) => void) {
   }
 }
 
+// XHR-based SSE accumulates responseText unboundedly — reconnect periodically to free it.
+const MAX_CONN_MS = 90_000;
+
 export function subscribeToAlerts(
   onNew: (alert: OfficialAlert) => void,
   onDelete: (id: number) => void,
@@ -51,6 +54,7 @@ export function subscribeToAlerts(
   let aborted = false;
   let currentXhr: XMLHttpRequest | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let lifetimeTimer: ReturnType<typeof setTimeout> | null = null;
 
   const connect = async () => {
     if (aborted) return;
@@ -77,9 +81,13 @@ export function subscribeToAlerts(
     };
 
     xhr.onloadend = () => {
+      if (lifetimeTimer) { clearTimeout(lifetimeTimer); lifetimeTimer = null; }
       currentXhr = null;
       if (!aborted) retryTimer = setTimeout(connect, 3_000);
     };
+
+    // Force reconnect after MAX_CONN_MS so responseText doesn't grow unboundedly
+    lifetimeTimer = setTimeout(() => { xhr.abort(); }, MAX_CONN_MS);
 
     xhr.send();
   };
@@ -88,7 +96,9 @@ export function subscribeToAlerts(
 
   return () => {
     aborted = true;
-    if (retryTimer) clearTimeout(retryTimer);
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+    if (lifetimeTimer) { clearTimeout(lifetimeTimer); lifetimeTimer = null; }
     currentXhr?.abort();
+    currentXhr = null;
   };
 }

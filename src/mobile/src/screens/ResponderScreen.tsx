@@ -16,7 +16,6 @@ import { API_URL } from '../api/client';
 import { useResponderStore } from '../store/useResponderStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useAlertStore } from '../store/useAlertStore';
-import { PointFormModal, PointFormData } from '../components/PointFormModal';
 
 type ResponderTab = 'open' | 'assigned' | 'resolved' | 'points' | 'alerts';
 type PointFilter = 'all' | 'active' | 'inactive';
@@ -198,7 +197,6 @@ export const ResponderScreen = () => {
   const [pointSearch, setPointSearch] = useState('');
   const [pointFilter, setPointFilter] = useState<PointFilter>('all');
   const [showPointFilter, setShowPointFilter] = useState(false);
-  const [showPointModal, setShowPointModal] = useState(false);
   const [pointSort, togglePointSort] = useSort();
 
 
@@ -280,12 +278,6 @@ export const ResponderScreen = () => {
       Alert.alert('Lỗi', msg);
     }
     setUpdatingId(null);
-  };
-
-  const handleAddPoint = async (data: PointFormData) => {
-    const point = await rescueApi.createPoint(data);
-    setPoints((prev) => [point, ...prev]);
-    setShowPointModal(false);
   };
 
   const handleTogglePoint = async (point: RescuePoint) => {
@@ -475,29 +467,25 @@ export const ResponderScreen = () => {
             >
               <Ionicons name="options-outline" size={18} color={showPointFilter ? '#fff' : colors.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pointIconBtn, { backgroundColor: colors.primary }]}
-              onPress={() => setShowPointModal(true)}
-            >
-              <Ionicons name="add" size={22} color="#fff" />
-            </TouchableOpacity>
           </View>
 
           {showPointFilter && (
             <View style={[styles.filterPanel, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-              <Text style={[Typography.label, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>TRẠNG THÁI</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
-                {(['all', 'active', 'inactive'] as const).map((f) => {
-                  const sel = pointFilter === f;
-                  return (
-                    <TouchableOpacity key={f} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setPointFilter(f)}>
-                      <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>
-                        {f === 'all' ? 'Tất cả' : f === 'active' ? 'Hoạt động' : 'Ngưng'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+              <View style={styles.filterRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary, width: 64 }]}>TRẠNG THÁI</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={styles.filterOptions}>
+                  {(['all', 'active', 'inactive'] as const).map((f) => {
+                    const sel = pointFilter === f;
+                    return (
+                      <TouchableOpacity key={f} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setPointFilter(f)}>
+                        <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>
+                          {f === 'all' ? 'Tất cả' : f === 'active' ? 'Hoạt động' : 'Ngưng'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
             </View>
           )}
 
@@ -561,12 +549,6 @@ export const ResponderScreen = () => {
             )}
           </ScrollView>
 
-          <PointFormModal
-            visible={showPointModal}
-            onClose={() => setShowPointModal(false)}
-            onSubmit={handleAddPoint}
-            colors={colors}
-          />
         </View>
       )}
 
@@ -658,6 +640,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.s,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.m },
   filterOptions: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
   filterChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14 },
   // Points table

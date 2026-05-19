@@ -104,6 +104,31 @@ interface RouteInfo {
   durationMin: number;
 }
 
+// Renders once, then stops tracking to prevent ViewChangesTracker bitmap leaks on Android.
+const RequestPin = React.memo(({ r, pinColor, onPress }: {
+  r: import('../api/rescue').RescueRequest;
+  pinColor: string;
+  onPress: () => void;
+}) => {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  return (
+    <Marker
+      coordinate={{ latitude: r.lat, longitude: r.lon }}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={tracksViewChanges}
+      onPress={onPress}
+    >
+      <View
+        style={[styles.requestPin, { backgroundColor: pinColor }]}
+        onLayout={() => setTracksViewChanges(false)}
+      >
+        <Ionicons name="alert" size={12} color="#fff" />
+      </View>
+    </Marker>
+  );
+});
+
+
 
 export const MapScreen = () => {
   const navigation = useNavigation();
@@ -425,21 +450,14 @@ export const MapScreen = () => {
   const requestMarkers = useMemo(() =>
     rescueRequests
       .filter((r) => r.status !== 'resolved')
-      .map((r) => {
-        const pinColor = r.status === 'open' ? themeColors.danger : themeColors.warning;
-        return (
-          <Marker
-            key={`req-${r.id}`}
-            coordinate={{ latitude: r.lat, longitude: r.lon }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            onPress={() => setSelectedRequest(r)}
-          >
-            <View style={[styles.requestPin, { backgroundColor: pinColor }]}>
-              <Ionicons name="alert" size={12} color="#fff" />
-            </View>
-          </Marker>
-        );
-      }),
+      .map((r) => (
+        <RequestPin
+          key={`req-${r.id}`}
+          r={r}
+          pinColor={r.status === 'open' ? themeColors.danger : themeColors.warning}
+          onPress={() => setSelectedRequest(r)}
+        />
+      )),
   [rescueRequests, themeColors, setSelectedRequest]);
 
 

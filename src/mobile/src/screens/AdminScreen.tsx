@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal, Switch,
+  StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -11,11 +11,9 @@ import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { adminApi, AdminUser, AdminStats } from '../api/admin';
 import { officialAlertsApi, OfficialAlert } from '../api/officialAlerts';
-import { rescueApi, RescuePoint } from '../api/rescue';
 import { useAlertStore } from '../store/useAlertStore';
-import { PointFormModal } from '../components/PointFormModal';
 
-type AdminTab = 'dashboard' | 'users' | 'alerts' | 'points';
+type AdminTab = 'dashboard' | 'users' | 'alerts';
 type Sort = { col: string; dir: 'asc' | 'desc' } | null;
 
 const ROLE_COLORS: Record<string, string> = {
@@ -258,15 +256,6 @@ export const AdminScreen = () => {
   const [alertUrgency, setAlertUrgency] = useState('all');
   const [alertProvince, setAlertProvince] = useState('');
 
-  // Points
-  const [points, setPoints] = useState<RescuePoint[]>([]);
-  const [pointSearch, setPointSearch] = useState('');
-  const [pointSort, togglePointSort] = useSort();
-  const [showPointFilter, setShowPointFilter] = useState(false);
-  const [pointStatus, setPointStatus] = useState('all');
-  const [pointProvince, setPointProvince] = useState('');
-  const [showPointModal, setShowPointModal] = useState(false);
-
   const loadDashboard = useCallback(async () => {
     try { setStats(await adminApi.getStats()); } catch { /* show empty */ }
   }, []);
@@ -281,12 +270,8 @@ export const AdminScreen = () => {
     try { setAlerts(await officialAlertsApi.getAll()); } catch { /* keep */ }
   }, []);
 
-  const loadPoints = useCallback(async () => {
-    try { setPoints(await rescueApi.getAllPoints()); } catch { /* keep */ }
-  }, []);
-
   useEffect(() => {
-    loadDashboard(); loadUsers(''); loadAlerts(); loadPoints();
+    loadDashboard(); loadUsers(''); loadAlerts();
   }, []);
 
   useEffect(() => {
@@ -296,7 +281,7 @@ export const AdminScreen = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([loadDashboard(), loadUsers(userSearch), loadAlerts(), loadPoints()]);
+    await Promise.all([loadDashboard(), loadUsers(userSearch), loadAlerts()]);
     setRefreshing(false);
   };
 
@@ -339,33 +324,6 @@ export const AdminScreen = () => {
     ]);
   };
 
-  const handleAddPoint = async (data: any) => {
-    const point = await rescueApi.createPoint(data);
-    setPoints((prev) => [point, ...prev]);
-    setShowPointModal(false);
-  };
-
-  const handleTogglePoint = async (point: RescuePoint) => {
-    try {
-      const updated = await rescueApi.updatePoint(point.id, { isActive: !point.isActive });
-      setPoints((prev) => prev.map((p) => p.id === point.id ? updated : p));
-    } catch { Alert.alert('Lỗi', 'Không thể cập nhật.'); }
-  };
-
-  const handleDeletePoint = (id: number) => {
-    Alert.alert('Xoá điểm', 'Xoá điểm sơ tán này?', [
-      { text: 'Huỷ', style: 'cancel' },
-      {
-        text: 'Xoá', style: 'destructive', onPress: async () => {
-          try {
-            await rescueApi.deletePoint(id);
-            setPoints((prev) => prev.filter((p) => p.id !== id));
-          } catch { Alert.alert('Lỗi', 'Không thể xoá.'); }
-        },
-      },
-    ]);
-  };
-
   // ── Filtered + sorted data ───────────────────────────────────────────────────
 
   const filteredUsers = useMemo(() => {
@@ -392,25 +350,6 @@ export const AdminScreen = () => {
     }
     return sorted(d, alertSort);
   }, [alerts, alertUrgency, alertProvince, alertSearch, alertSort]);
-
-  const filteredPoints = useMemo(() => {
-    let d = points;
-    if (pointStatus === 'active') d = d.filter((p) => p.isActive);
-    if (pointStatus === 'inactive') d = d.filter((p) => !p.isActive);
-    if (pointProvince.trim()) {
-      const q = pointProvince.toLowerCase();
-      d = d.filter((p) => (p.province ?? '').toLowerCase().includes(q));
-    }
-    if (pointSearch.trim()) {
-      const q = pointSearch.toLowerCase();
-      d = d.filter((p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.address ?? '').toLowerCase().includes(q) ||
-        (p.province ?? '').toLowerCase().includes(q)
-      );
-    }
-    return sorted(d, pointSort);
-  }, [points, pointStatus, pointProvince, pointSearch, pointSort]);
 
   // ── Sub-components ───────────────────────────────────────────────────────────
 
@@ -479,7 +418,6 @@ export const AdminScreen = () => {
     { key: 'dashboard', label: 'Tổng quan' },
     { key: 'users', label: 'Người dùng' },
     { key: 'alerts', label: 'Thông báo' },
-    { key: 'points', label: 'Điểm sơ tán' },
   ];
 
   return (
@@ -717,97 +655,6 @@ export const AdminScreen = () => {
         </View>
       )}
 
-      {/* ── Points ── */}
-      {activeTab === 'points' && (
-        <View style={{ flex: 1 }}>
-          <Toolbar
-            search={pointSearch} onSearch={setPointSearch} placeholder="Tìm điểm sơ tán..."
-            showFilter={showPointFilter} onToggleFilter={() => setShowPointFilter((v) => !v)}
-            onAdd={() => setShowPointModal(true)}
-          />
-          {showPointFilter && (
-            <View style={[styles.filterPanel, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-              <View style={styles.filterRow}>
-                <Text style={[Typography.label, { color: colors.textSecondary, width: 60 }]}>TRẠNG THÁI</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={styles.filterOptions}>
-                  {[['all', 'Tất cả'], ['active', 'Hoạt động'], ['inactive', 'Ngưng']].map(([v, l]) => {
-                    const sel = pointStatus === v;
-                    return (
-                      <TouchableOpacity key={v} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setPointStatus(v)}>
-                        <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>{l}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-              <View style={styles.filterRow}>
-                <Text style={[Typography.label, { color: colors.textSecondary, width: 60 }]}>TỈNH</Text>
-                <TextInput
-                  style={[styles.filterInput, { color: colors.text, borderBottomColor: colors.border }]}
-                  placeholder="Lọc theo tỉnh..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={pointProvince}
-                  onChangeText={setPointProvince}
-                />
-              </View>
-            </View>
-          )}
-          <ScrollView
-            contentContainerStyle={styles.tableBody}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-          >
-            {filteredPoints.length === 0
-              ? <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>Chưa có điểm sơ tán nào.</Text>
-              : (
-                <View style={[styles.tableCard, { backgroundColor: colors.card }]}>
-                  <View style={[styles.tableHeader, { backgroundColor: colors.secondary }]}>
-                    <View style={styles.colPtName}><SortHdr col="name" label="TÊN / ĐỊA CHỈ" s={pointSort} toggle={togglePointSort} /></View>
-                    <View style={styles.colPtStatus}><SortHdr col="isActive" label="KÍCH HOẠT" s={pointSort} toggle={togglePointSort} /></View>
-                    <View style={{ width: 32 }} />
-                  </View>
-                  {filteredPoints.map((point, i) => (
-                    <React.Fragment key={point.id}>
-                      {i > 0 && <View style={[styles.rowDiv, { backgroundColor: colors.border }]} />}
-                      <View style={styles.tableRow}>
-                        <View style={styles.colPtName}>
-                          <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>{point.name}</Text>
-                          {(point.address || point.province) && (
-                            <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-                              {[point.address, point.province].filter(Boolean).join(' · ')}
-                            </Text>
-                          )}
-                        </View>
-                        <View style={[styles.colPtStatus, { alignItems: 'center' }]}>
-                          <Switch
-                            value={point.isActive}
-                            onValueChange={() => handleTogglePoint(point)}
-                            trackColor={{ false: colors.border, true: '#2ECC71' }}
-                            thumbColor="#fff"
-                          />
-                        </View>
-                        <TouchableOpacity
-                          style={{ width: 32, alignItems: 'center' }}
-                          onPress={() => handleDeletePoint(point.id)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                        </TouchableOpacity>
-                      </View>
-                    </React.Fragment>
-                  ))}
-                </View>
-              )
-            }
-          </ScrollView>
-          <PointFormModal
-            visible={showPointModal}
-            onClose={() => setShowPointModal(false)}
-            onSubmit={handleAddPoint}
-            colors={colors}
-          />
-        </View>
-      )}
-
       <UserDetailModal
         user={selectedUser}
         onClose={() => setSelectedUser(null)}
@@ -873,7 +720,5 @@ const styles = StyleSheet.create({
   colAlertTitle: { flex: 1 },
   colAlertProvince: { width: 72 },
   colAlertDate: { width: 44 },
-  // Points columns
-  colPtName: { flex: 1 },
-  colPtStatus: { width: 88 },
+
 });

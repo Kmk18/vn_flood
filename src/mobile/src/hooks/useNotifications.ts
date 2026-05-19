@@ -28,18 +28,6 @@ async function registerPushToken() {
   }
 }
 
-// Called by the alert store whenever a new SSE alert arrives (app in foreground).
-export async function scheduleLocalNotification(title: string, body: string) {
-  const pref = await SecureStore.getItemAsync(PREF_KEY).catch(() => null);
-  if (pref !== 'true') return;
-  const { status } = await Notifications.getPermissionsAsync();
-  if (status !== 'granted') return;
-  await Notifications.scheduleNotificationAsync({
-    content: { title, body, sound: true },
-    trigger: null,
-  });
-}
-
 export function useNotifications() {
   const [enabled, setEnabled] = useState(false);
 

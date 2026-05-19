@@ -11,7 +11,9 @@ import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { PostAlertForm } from '../components/PostAlertForm';
 import { rescueApi, RescueRequest, RescuePoint } from '../api/rescue';
+import { PointFormModal, PointFormData } from '../components/PointFormModal';
 import { useAlertStore } from '../store/useAlertStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { useResponderStore } from '../store/useResponderStore';
 
 type AuthTab = 'post' | 'requests' | 'points';
@@ -61,6 +63,7 @@ export const AuthorityScreen = () => {
   const route = useRoute<any>();
   const fetchAlerts = useAlertStore((s) => s.fetchAlerts);
   const setPendingNav = useResponderStore((s) => s.setPendingNav);
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 
   const [activeTab, setActiveTab] = useState<AuthTab>(
     route.params?.initialTab ?? 'post'
@@ -79,6 +82,7 @@ export const AuthorityScreen = () => {
   const [ptSearch, setPtSearch] = useState('');
   const [ptFilter, setPtFilter] = useState<PtActiveFilter>('all');
   const [showPtFilter, setShowPtFilter] = useState(false);
+  const [showPointModal, setShowPointModal] = useState(false);
   const [ptSort, togglePtSort] = useSort();
 
   const SortHdr = ({ col, label, s, toggle, style }: {
@@ -116,6 +120,12 @@ export const AuthorityScreen = () => {
     setRefreshing(true);
     await Promise.all([loadRequests(), loadPoints()]);
     setRefreshing(false);
+  };
+
+  const handleAddPoint = async (data: PointFormData) => {
+    const point = await rescueApi.createPoint(data);
+    setPoints((prev) => [point, ...prev]);
+    setShowPointModal(false);
   };
 
   const handleTogglePoint = async (point: RescuePoint) => {
@@ -255,23 +265,33 @@ export const AuthorityScreen = () => {
             >
               <Ionicons name="options-outline" size={18} color={showPtFilter ? '#fff' : colors.textSecondary} />
             </TouchableOpacity>
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.iconBtn, { backgroundColor: colors.primary }]}
+                onPress={() => setShowPointModal(true)}
+              >
+                <Ionicons name="add" size={22} color="#fff" />
+              </TouchableOpacity>
+            )}
           </View>
 
           {showPtFilter && (
             <View style={[styles.filterPanel, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-              <Text style={[Typography.label, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>TRẠNG THÁI</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
-                {(['all', 'active', 'inactive'] as const).map((f) => {
-                  const sel = ptFilter === f;
-                  return (
-                    <TouchableOpacity key={f} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setPtFilter(f)}>
-                      <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>
-                        {f === 'all' ? 'Tất cả' : f === 'active' ? 'Hoạt động' : 'Ngưng'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+              <View style={styles.filterRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary, width: 64 }]}>TRẠNG THÁI</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={styles.filterOptions}>
+                  {(['all', 'active', 'inactive'] as const).map((f) => {
+                    const sel = ptFilter === f;
+                    return (
+                      <TouchableOpacity key={f} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setPtFilter(f)}>
+                        <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>
+                          {f === 'all' ? 'Tất cả' : f === 'active' ? 'Hoạt động' : 'Ngưng'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
             </View>
           )}
 
@@ -339,6 +359,12 @@ export const AuthorityScreen = () => {
               </View>
             )}
           </ScrollView>
+          <PointFormModal
+            visible={showPointModal}
+            onClose={() => setShowPointModal(false)}
+            onSubmit={handleAddPoint}
+            colors={colors}
+          />
         </View>
       )}
 
@@ -377,20 +403,22 @@ export const AuthorityScreen = () => {
 
           {showReqFilter && (
             <View style={[styles.filterPanel, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-              <Text style={[Typography.label, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>TRẠNG THÁI</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
-                {(['all', 'open', 'assigned', 'resolved'] as const).map((f) => {
-                  const sel = reqStatusFilter === f;
-                  const label = f === 'all' ? 'Tất cả' : STATUS_LABELS[f];
-                  return (
-                    <TouchableOpacity key={f} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setReqStatusFilter(f)}>
-                      <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>
-                        {label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+              <View style={styles.filterRow}>
+                <Text style={[Typography.label, { color: colors.textSecondary, width: 64 }]}>TRẠNG THÁI</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={styles.filterOptions}>
+                  {(['all', 'open', 'assigned', 'resolved'] as const).map((f) => {
+                    const sel = reqStatusFilter === f;
+                    const label = f === 'all' ? 'Tất cả' : STATUS_LABELS[f];
+                    return (
+                      <TouchableOpacity key={f} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setReqStatusFilter(f)}>
+                        <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
             </View>
           )}
 
@@ -513,6 +541,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.s,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.m },
   filterOptions: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
   filterChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14 },
   actionSlot: { width: 28, alignItems: 'center' as const, justifyContent: 'center' as const },

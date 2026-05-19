@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { officialAlertsApi, subscribeToAlerts } from '../api/officialAlerts';
-import { scheduleLocalNotification } from '../hooks/useNotifications';
 
 const GUEST_READ_IDS_KEY = 'guest_read_ids';
 
@@ -120,7 +119,6 @@ export const useAlertStore = create<AlertState>((set, get) => ({
           timestamp: raw.createdAt,
           province: raw.province,
         });
-        scheduleLocalNotification(raw.title, raw.message).catch(() => {});
       },
       (id) => removeAlert(String(id)),
     );
