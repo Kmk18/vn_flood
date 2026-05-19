@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, Alert, Platform, RefreshControl,
+  StyleSheet, Alert, Platform, RefreshControl, Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, NavigationProp } from '@react-navigation/native';
@@ -10,11 +10,13 @@ import { Spacing, Typography } from '../theme';
 import { useTheme } from '../theme/useTheme';
 import { GlobalStyles } from '../theme/globalStyles';
 import { PostAlertForm } from '../components/PostAlertForm';
-import { rescueApi, RescueRequest } from '../api/rescue';
+import { rescueApi, RescueRequest, RescuePoint } from '../api/rescue';
 import { useAlertStore } from '../store/useAlertStore';
+import { useResponderStore } from '../store/useResponderStore';
 
-type AuthTab = 'post' | 'requests';
+type AuthTab = 'post' | 'requests' | 'points';
 type ReqStatusFilter = 'all' | 'open' | 'assigned' | 'resolved';
+type PtActiveFilter = 'all' | 'active' | 'inactive';
 
 const STATUS_COLORS: Record<string, string> = {
   open: '#E74C3C',
@@ -58,6 +60,7 @@ export const AuthorityScreen = () => {
   const navigation = useNavigation<NavigationProp<any>>();
   const route = useRoute<any>();
   const fetchAlerts = useAlertStore((s) => s.fetchAlerts);
+  const setPendingNav = useResponderStore((s) => s.setPendingNav);
 
   const [activeTab, setActiveTab] = useState<AuthTab>(
     route.params?.initialTab ?? 'post'
@@ -70,6 +73,13 @@ export const AuthorityScreen = () => {
   const [reqStatusFilter, setReqStatusFilter] = useState<ReqStatusFilter>('all');
   const [showReqFilter, setShowReqFilter] = useState(false);
   const [reqSort, toggleReqSort] = useSort();
+
+  // Rescue points
+  const [points, setPoints] = useState<RescuePoint[]>([]);
+  const [ptSearch, setPtSearch] = useState('');
+  const [ptFilter, setPtFilter] = useState<PtActiveFilter>('all');
+  const [showPtFilter, setShowPtFilter] = useState(false);
+  const [ptSort, togglePtSort] = useSort();
 
   const SortHdr = ({ col, label, s, toggle, style }: {
     col: string; label: string; s: Sort; toggle: (c: string) => void; style?: any;
@@ -96,12 +106,63 @@ export const AuthorityScreen = () => {
     try { setRequests(await rescueApi.getAllRequests('all')); } catch { /* keep */ }
   }, []);
 
-  useEffect(() => { loadRequests(); }, [loadRequests]);
+  const loadPoints = useCallback(async () => {
+    try { setPoints(await rescueApi.getAllPoints()); } catch { /* keep */ }
+  }, []);
+
+  useEffect(() => { loadRequests(); loadPoints(); }, [loadRequests, loadPoints]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadRequests();
+    await Promise.all([loadRequests(), loadPoints()]);
     setRefreshing(false);
+  };
+
+  const handleTogglePoint = async (point: RescuePoint) => {
+    try {
+      const updated = await rescueApi.updatePoint(point.id, { isActive: !point.isActive });
+      setPoints((prev) => prev.map((p) => p.id === point.id ? updated : p));
+    } catch {
+      Alert.alert('Lỗi', 'Không thể cập nhật. Thử lại.');
+    }
+  };
+
+  const handleDeletePoint = (point: RescuePoint) => {
+    Alert.alert('Xác nhận', `Xóa điểm "${point.name}"?`, [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xóa', style: 'destructive',
+        onPress: async () => {
+          try {
+            await rescueApi.deletePoint(point.id);
+            setPoints((prev) => prev.filter((p) => p.id !== point.id));
+          } catch {
+            Alert.alert('Lỗi', 'Không thể xóa. Thử lại.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleNavigateToPoint = (point: RescuePoint) => {
+    setPendingNav({ id: point.id, lat: point.lat, lon: point.lon, label: point.name });
+    (navigation as any).navigate('MainTabs', { screen: 'Bản đồ' });
+  };
+
+  const filteredPoints = useMemo(() => {
+    const q = ptSearch.trim().toLowerCase();
+    const base = points.filter((p) => {
+      if (ptFilter === 'active' && !p.isActive) return false;
+      if (ptFilter === 'inactive' && p.isActive) return false;
+      if (q) return p.name.toLowerCase().includes(q) || (p.address ?? '').toLowerCase().includes(q);
+      return true;
+    });
+    return sorted(base, ptSort);
+  }, [points, ptSearch, ptFilter, ptSort]);
+
+  const handleNavigateToRequest = (req: RescueRequest) => {
+    setPendingNav({ id: req.id, lat: req.lat, lon: req.lon, label: `Yêu cầu #${req.id}` });
+    (navigation as any).navigate('MainTabs', { screen: 'Bản đồ' });
   };
 
   const handleUpdateStatus = async (id: number, status: 'open' | 'assigned' | 'resolved') => {
@@ -126,6 +187,7 @@ export const AuthorityScreen = () => {
   const tabs: { key: AuthTab; label: string }[] = [
     { key: 'post', label: 'Thông báo' },
     { key: 'requests', label: 'Cứu hộ' },
+    { key: 'points', label: 'Điểm sơ tán' },
   ];
 
   return (
@@ -166,6 +228,119 @@ export const AuthorityScreen = () => {
           );
         })}
       </ScrollView>
+
+      {/* ── Rescue Points ── */}
+      {activeTab === 'points' && (
+        <View style={{ flex: 1 }}>
+          <View style={[styles.toolbar, { borderBottomColor: colors.border }]}>
+            <View style={[styles.searchBar, { backgroundColor: colors.secondary }]}>
+              <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder="Tìm tên hoặc địa chỉ..."
+                placeholderTextColor={colors.textSecondary}
+                value={ptSearch}
+                onChangeText={setPtSearch}
+                clearButtonMode="while-editing"
+              />
+              {ptSearch.length > 0 && Platform.OS === 'android' && (
+                <TouchableOpacity onPress={() => setPtSearch('')}>
+                  <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[styles.iconBtn, { backgroundColor: showPtFilter ? colors.primary : colors.secondary }]}
+              onPress={() => setShowPtFilter((v) => !v)}
+            >
+              <Ionicons name="options-outline" size={18} color={showPtFilter ? '#fff' : colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {showPtFilter && (
+            <View style={[styles.filterPanel, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+              <Text style={[Typography.label, { color: colors.textSecondary, marginBottom: Spacing.xs }]}>TRẠNG THÁI</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
+                {(['all', 'active', 'inactive'] as const).map((f) => {
+                  const sel = ptFilter === f;
+                  return (
+                    <TouchableOpacity key={f} style={[styles.filterChip, { backgroundColor: sel ? colors.primary : colors.secondary }]} onPress={() => setPtFilter(f)}>
+                      <Text style={[Typography.label, { color: sel ? '#fff' : colors.textSecondary }]}>
+                        {f === 'all' ? 'Tất cả' : f === 'active' ? 'Hoạt động' : 'Ngưng'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          <ScrollView
+            contentContainerStyle={styles.tableBody}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
+            {filteredPoints.length === 0 ? (
+              <Text style={[Typography.body1, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.xl }]}>
+                {ptSearch.trim() || ptFilter !== 'all' ? 'Không tìm thấy điểm phù hợp.' : 'Chưa có điểm sơ tán nào.'}
+              </Text>
+            ) : (
+              <View style={[styles.tableCard, { backgroundColor: colors.card }]}>
+                <View style={[styles.tableHeader, { backgroundColor: colors.secondary }]}>
+                  <SortHdr col="name" label="TÊN ĐIỂM / ĐỊA CHỈ" s={ptSort} toggle={togglePtSort} style={styles.ptColName} />
+                  <View style={styles.ptColStatus}>
+                    <Text style={[Typography.label, { color: colors.textSecondary, textAlign: 'center' }]}>KÍCH HOẠT</Text>
+                  </View>
+                  <View style={styles.ptColNav}>
+                    <Text style={[Typography.label, { color: colors.textSecondary, textAlign: 'center' }]}>CHỈ ĐƯỜNG</Text>
+                  </View>
+                  <View style={styles.ptColDel}>
+                    <Text style={[Typography.label, { color: colors.textSecondary, textAlign: 'center' }]}>XÓA</Text>
+                  </View>
+                </View>
+
+                {filteredPoints.map((point, i) => (
+                  <React.Fragment key={point.id}>
+                    {i > 0 && <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />}
+                    <View style={styles.tableRow}>
+                      <View style={styles.ptColName}>
+                        <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>
+                          {point.name}
+                        </Text>
+                        {(point.address || point.province) && (
+                          <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
+                            {[point.address, point.province].filter(Boolean).join(' · ')}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={[styles.ptColStatus, { alignItems: 'center' }]}>
+                        <Switch
+                          value={point.isActive}
+                          onValueChange={() => handleTogglePoint(point)}
+                          trackColor={{ false: colors.border, true: '#2ECC71' }}
+                          thumbColor="#fff"
+                        />
+                      </View>
+                      <View style={[styles.ptColNav, { alignItems: 'center' }]}>
+                        {point.lat !== 0 && (
+                          <TouchableOpacity onPress={() => handleNavigateToPoint(point)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Ionicons name="navigate-outline" size={18} color="#3b82f6" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <View style={[styles.ptColDel, { alignItems: 'center' }]}>
+                        <TouchableOpacity onPress={() => handleDeletePoint(point)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="trash-outline" size={18} color="#E74C3C" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </React.Fragment>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      )}
 
       {/* ── Post Alert ── */}
       {activeTab === 'post' && (
@@ -278,6 +453,11 @@ export const AuthorityScreen = () => {
                             </TouchableOpacity>
                           )}
                         </View>
+                        <View style={styles.actionSlot}>
+                          <TouchableOpacity onPress={() => handleNavigateToRequest(req)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                            <Ionicons name="navigate-outline" size={18} color="#3b82f6" />
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </React.Fragment>
@@ -361,5 +541,9 @@ const styles = StyleSheet.create({
   rowDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.m },
   colReqInfo: { flex: 1 },
   colReqStatus: { width: 80, justifyContent: 'center' as const },
-  colReqActions: { width: 56 },
+  colReqActions: { width: 84 },
+  ptColName: { flex: 1 },
+  ptColStatus: { width: 60 },
+  ptColNav: { width: 44 },
+  ptColDel: { width: 36 },
 });

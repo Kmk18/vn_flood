@@ -901,17 +901,46 @@ export const MapScreen = () => {
               ))}
             </ScrollView>
           )}
-          <TouchableOpacity
-            style={[styles.reqCardBtn, { backgroundColor: themeColors.primary }]}
-            onPress={() => {
-              setSelectedRequest(null);
-              (navigation as any).navigate('Authority', { initialTab: 'requests' });
-            }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="list-outline" size={14} color="#fff" />
-            <Text style={styles.reqCardBtnText}>Điều phối</Text>
-          </TouchableOpacity>
+          <View style={styles.reqCardBtnRow}>
+            <TouchableOpacity
+              style={[styles.reqCardBtn, { flex: 1, backgroundColor: '#3b82f6' }]}
+              onPress={() => {
+                handleSelectRescue({
+                  id: selectedRequest.id,
+                  name: `Yêu cầu #${selectedRequest.id}`,
+                  lat: selectedRequest.lat,
+                  lon: selectedRequest.lon,
+                  capacity: 0,
+                  province: '',
+                  address: '',
+                  isActive: true,
+                });
+                mapRef.current?.animateToRegion(
+                  { latitude: selectedRequest.lat, longitude: selectedRequest.lon, latitudeDelta: 0.05, longitudeDelta: 0.05 },
+                  600,
+                );
+                setSelectedRequest(null);
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="navigate-outline" size={14} color="#fff" />
+              <Text style={styles.reqCardBtnText}>Chỉ đường</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.reqCardBtn, { flex: 1, backgroundColor: themeColors.primary }]}
+              onPress={() => {
+                setSelectedRequest(null);
+                (navigation as any).navigate(
+                  user?.role === 'admin' ? 'Authority' : 'Responder',
+                  { initialTab: 'requests' },
+                );
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="list-outline" size={14} color="#fff" />
+              <Text style={styles.reqCardBtnText}>Điều phối</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </View>
@@ -1039,9 +1068,14 @@ const styles = StyleSheet.create({
   },
   statusDotReq: { width: 8, height: 8, borderRadius: 4 },
   reqCardPhoto: { width: 80, height: 80, borderRadius: 8, marginRight: Spacing.s },
+  reqCardBtnRow: {
+    flexDirection: 'row',
+    gap: Spacing.s,
+    marginTop: Spacing.s,
+  },
   reqCardBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 4, height: 32, borderRadius: 8, marginTop: Spacing.s,
+    gap: 4, height: 32, borderRadius: 8,
   },
   reqCardBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
   selectedRescueMarker: {

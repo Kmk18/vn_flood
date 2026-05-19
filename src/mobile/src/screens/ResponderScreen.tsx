@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Image, TouchableOpacity, TextInput,
   StyleSheet, Alert, ActivityIndicator, RefreshControl,
-  Switch, Linking, Platform,
+  Switch, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -58,15 +58,6 @@ const STATUS_LABEL: Record<string, string> = {
   resolved: 'Hoàn thành',
 };
 
-function openExternalNav(lat: number, lon: number) {
-  const url = Platform.OS === 'ios'
-    ? `maps://app?daddr=${lat},${lon}`
-    : `geo:${lat},${lon}?q=${lat},${lon}`;
-  Linking.openURL(url).catch(() =>
-    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`)
-  );
-}
-
 // ── Request card ──────────────────────────────────────────────────────────────
 
 interface RequestCardProps {
@@ -74,11 +65,12 @@ interface RequestCardProps {
   currentUserId: number | undefined;
   onAccept: (req: RescueRequest) => void;
   onResolve: (id: number) => void;
+  onNavigate: (req: RescueRequest) => void;
   updatingId: number | null;
   colors: ReturnType<typeof import('../theme/useTheme').useTheme>['colors'];
 }
 
-const RequestCard: React.FC<RequestCardProps> = ({ req, currentUserId, onAccept, onResolve, updatingId, colors }) => {
+const RequestCard: React.FC<RequestCardProps> = ({ req, currentUserId, onAccept, onResolve, onNavigate, updatingId, colors }) => {
   const assignedUsers = req.assignedUsers ?? [];
   const isAssignedToMe = assignedUsers.some((u) => u.id === currentUserId);
   const busy = updatingId === req.id;
@@ -172,6 +164,12 @@ const RequestCard: React.FC<RequestCardProps> = ({ req, currentUserId, onAccept,
               <Text style={[Typography.label, { color: colors.primary, marginLeft: 4 }]}>Đã tiếp nhận</Text>
             </View>
           )}
+          {isAssignedToMe && (
+            <TouchableOpacity style={styles.feedAction} onPress={() => onNavigate(req)} activeOpacity={0.7}>
+              <Ionicons name="navigate-outline" size={16} color="#3b82f6" />
+              <Text style={[Typography.label, { color: '#3b82f6', marginLeft: 4 }]}>Chỉ đường</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -261,6 +259,16 @@ export const ResponderScreen = () => {
     setUpdatingId(null);
   };
 
+  const handleNavigate = (req: RescueRequest) => {
+    setPendingNav({ id: req.id, lat: req.lat, lon: req.lon, label: `Yêu cầu #${req.id}` });
+    (navigation as any).navigate('MainTabs', { screen: 'Bản đồ' });
+  };
+
+  const handleNavigateToPoint = (point: RescuePoint) => {
+    setPendingNav({ id: point.id, lat: point.lat, lon: point.lon, label: point.name });
+    (navigation as any).navigate('MainTabs', { screen: 'Bản đồ' });
+  };
+
   const handleResolve = async (id: number) => {
     setUpdatingId(id);
     try {
@@ -321,6 +329,7 @@ export const ResponderScreen = () => {
               currentUserId={currentUser?.id}
               onAccept={handleAccept}
               onResolve={handleResolve}
+              onNavigate={handleNavigate}
               updatingId={updatingId}
               colors={colors}
             />
@@ -375,6 +384,7 @@ export const ResponderScreen = () => {
       {/* ── Open requests ── */}
       {activeTab === 'open' && (
         <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={styles.body}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
@@ -386,6 +396,7 @@ export const ResponderScreen = () => {
       {/* ── Assigned requests ── */}
       {activeTab === 'assigned' && (
         <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={styles.body}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
@@ -397,6 +408,7 @@ export const ResponderScreen = () => {
       {/* ── Resolved requests ── */}
       {activeTab === 'resolved' && (
         <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={styles.body}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
@@ -503,9 +515,11 @@ export const ResponderScreen = () => {
               <View style={[styles.ptTableCard, { backgroundColor: colors.card }]}>
                 <View style={[styles.ptTableHeader, { backgroundColor: colors.secondary }]}>
                   <SortHdr col="name" label="TÊN ĐIỂM / ĐỊA CHỈ" s={pointSort} toggle={togglePointSort} style={styles.ptColName} />
-                  <SortHdr col="capacity" label="SỨC CHỨA" s={pointSort} toggle={togglePointSort} style={styles.ptColCap} />
                   <View style={styles.ptColStatus}>
                     <Text style={[Typography.label, { color: colors.textSecondary, textAlign: 'center' }]}>KÍCH HOẠT</Text>
+                  </View>
+                  <View style={styles.ptColNav}>
+                    <Text style={[Typography.label, { color: colors.textSecondary, textAlign: 'center' }]}>CHỈ ĐƯỜNG</Text>
                   </View>
                 </View>
                 {filteredPoints.map((point, i) => (
@@ -513,29 +527,14 @@ export const ResponderScreen = () => {
                     {i > 0 && <View style={[styles.ptRowDivider, { backgroundColor: colors.border }]} />}
                     <View style={styles.ptTableRow}>
                       <View style={styles.ptColName}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={[Typography.body2, { color: colors.text, fontWeight: '600', flex: 1 }]} numberOfLines={1}>
-                            {point.name}
-                          </Text>
-                          {point.lat !== 0 && (
-                            <TouchableOpacity
-                              onPress={() => openExternalNav(point.lat, point.lon)}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <Ionicons name="navigate-outline" size={14} color={colors.primary} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        <Text style={[Typography.body2, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>
+                          {point.name}
+                        </Text>
                         {(point.address || point.province) && (
                           <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
                             {[point.address, point.province].filter(Boolean).join(' · ')}
                           </Text>
                         )}
-                      </View>
-                      <View style={styles.ptColCap}>
-                        <Text style={[Typography.body2, { color: colors.text, textAlign: 'center' }]}>
-                          {point.capacity || '—'}
-                        </Text>
                       </View>
                       <View style={[styles.ptColStatus, { alignItems: 'center' }]}>
                         <Switch
@@ -544,6 +543,16 @@ export const ResponderScreen = () => {
                           trackColor={{ false: colors.border, true: '#2ECC71' }}
                           thumbColor="#fff"
                         />
+                      </View>
+                      <View style={[styles.ptColNav, { alignItems: 'center' }]}>
+                        {point.lat !== 0 && (
+                          <TouchableOpacity
+                            onPress={() => handleNavigateToPoint(point)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="navigate-outline" size={18} color="#3b82f6" />
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   </React.Fragment>
@@ -676,6 +685,6 @@ const styles = StyleSheet.create({
   },
   ptRowDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.m },
   ptColName: { flex: 1 },
-  ptColCap: { width: 52 },
   ptColStatus: { width: 60 },
+  ptColNav: { width: 44 },
 });

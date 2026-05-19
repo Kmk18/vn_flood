@@ -5,6 +5,7 @@ import {
   TextStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { Spacing, Typography } from '../theme';
 import { GlobalStyles } from '../theme/globalStyles';
@@ -268,7 +269,7 @@ export const ChatbotScreen = () => {
             onPress={() => sendMessage(inputText)}
             disabled={!inputText.trim() || isLoading}
           >
-            <Text style={styles.sendIcon}>↑</Text>
+            <Ionicons name="paper-plane" size={16} color="#fff" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -349,11 +350,5 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sendIcon: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    lineHeight: 20,
   },
 });

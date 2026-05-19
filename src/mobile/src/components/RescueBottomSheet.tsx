@@ -32,9 +32,10 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   onSelectShelter?: (shelter: RescuePoint) => void;
+  onSubmitted?: () => void;
 }
 
-export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectShelter }) => {
+export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectShelter, onSubmitted }) => {
   const { colors: themeColors } = useTheme();
   const shareLocation = useLocationStore((s) => s.shareLocation);
   const locationRef = useRef<{ lat: number; lon: number } | null>(null);
@@ -228,6 +229,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
         const { lat, lon } = locationRef.current!;
         rescueApi.createRequest({ lat, lon, peopleCount, notes: description || undefined, photos })
           .catch(() => {});
+        setTimeout(() => onSubmitted?.(), 1500);
       }
     });
   };

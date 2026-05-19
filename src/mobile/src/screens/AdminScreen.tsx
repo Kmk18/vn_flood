@@ -535,7 +535,7 @@ export const AdminScreen = () => {
             <TouchableOpacity style={styles.actionRow} onPress={() => navigation.navigate('Authority')} activeOpacity={0.7}>
               <Ionicons name="megaphone-outline" size={20} color={colors.primary} />
               <Text style={[Typography.body1, { color: colors.text, flex: 1, marginLeft: Spacing.m }]}>
-                Đăng thông báo / Quản lý điểm sơ tán
+                Đăng thông báo
               </Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -875,5 +875,5 @@ const styles = StyleSheet.create({
   colAlertDate: { width: 44 },
   // Points columns
   colPtName: { flex: 1 },
-  colPtStatus: { width: 60 },
+  colPtStatus: { width: 88 },
 });

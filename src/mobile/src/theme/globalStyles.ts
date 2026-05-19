@@ -318,7 +318,7 @@ export const GlobalStyles = StyleSheet.create({
   // -------------------------
   // Shared screen tab bar (AdminScreen, AuthorityScreen)
   // -------------------------
-  screenTabBar: { borderBottomWidth: 1, flexGrow: 0 },
+  screenTabBar: { borderBottomWidth: 1, flexGrow: 0, flexShrink: 0 },
   screenTabBarContent: { paddingHorizontal: Spacing.m },
   screenTab: {
     flexDirection: 'row' as const,

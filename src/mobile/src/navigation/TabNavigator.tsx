@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useNavigation, TabActions } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { MapScreen } from '../screens/MapScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { ChatbotScreen } from '../screens/ChatbotScreen';
@@ -62,10 +62,17 @@ export const TabNavigator = () => {
     setRescueOpen(true);
   };
 
+  const navToMap = () => navigation.navigate('MainTabs' as never, { screen: 'Bản đồ' } as never);
+
   const handleShelterSelect = (shelter: RescuePoint) => {
     setPendingNav({ id: shelter.id, lat: shelter.lat, lon: shelter.lon, label: shelter.name });
     setRescueOpen(false);
-    navigation.dispatch(TabActions.jumpTo('Bản đồ'));
+    navToMap();
+  };
+
+  const handleSosSubmitted = () => {
+    setRescueOpen(false);
+    navToMap();
   };
 
   return (
@@ -85,7 +92,7 @@ export const TabNavigator = () => {
             const icons: Record<string, [string, string]> = {
               'Bản đồ':  ['map', 'map-outline'],
               'Cảnh báo': ['warning', 'warning-outline'],
-              'Trợ lý':  ['paper-plane', 'paper-plane-outline'],
+              'Trợ lý':  ['chatbubble', 'chatbubble-outline'],
               'Hồ sơ':   ['person', 'person-outline'],
             };
             const [active, inactive] = icons[route.name] ?? ['ellipse', 'ellipse-outline'];
@@ -122,6 +129,7 @@ export const TabNavigator = () => {
         visible={rescueOpen}
         onClose={() => setRescueOpen(false)}
         onSelectShelter={handleShelterSelect}
+        onSubmitted={handleSosSubmitted}
       />
     </View>
   );
