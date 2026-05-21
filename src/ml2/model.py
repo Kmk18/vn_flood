@@ -18,7 +18,6 @@ ARTIFACT_FILES = [
     "lgbm_flood_v3.pkl",
     "feature_cols_v3.pkl",
     "train_medians_v3.pkl",
-    "basin_climatology_v3.pkl",
 ]
 
 RISK_THRESHOLDS = {
@@ -31,7 +30,6 @@ RISK_THRESHOLDS = {
 _model         = None
 _feature_cols  = None
 _train_medians = None
-_climatology   = None
 
 
 def _download_from_gcs():
@@ -65,13 +63,7 @@ def load_artifacts():
     _model         = joblib.load(ARTIFACTS_DIR / "lgbm_flood_v3.pkl")
     _feature_cols  = joblib.load(ARTIFACTS_DIR / "feature_cols_v3.pkl")
     _train_medians = joblib.load(ARTIFACTS_DIR / "train_medians_v3.pkl")
-    _climatology   = joblib.load(ARTIFACTS_DIR / "basin_climatology_v3.pkl")
-    log.info(f"Model v3 loaded — {len(_feature_cols)} features, {len(_climatology)} climatology rows")
-
-
-def get_climatology() -> "pd.DataFrame":
-    load_artifacts()
-    return _climatology
+    log.info(f"Model v3 loaded — {len(_feature_cols)} features")
 
 
 def get_risk_level(prob: float) -> str:

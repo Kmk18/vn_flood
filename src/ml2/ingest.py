@@ -13,7 +13,7 @@ import pandas as pd
 from imerg import fetch_ibtracs_active, fetch_precip_for_basins, fetch_precip_today_partial
 from db import fetch_basins, fetch_weather_history, upsert_predictions, upsert_weather
 from features import build_features
-from model import get_climatology, predict
+from model import predict
 
 log = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ def run_ingestion(target_date: date) -> dict:
     df = df.merge(typhoon_df, on="HYBAS_ID", how="left")
 
     log.info("  Engineering features...")
-    df = build_features(df, climatology=get_climatology())
+    df = build_features(df)
 
     for src, dst in [
         ("elev_m",         "elevation_m"),
