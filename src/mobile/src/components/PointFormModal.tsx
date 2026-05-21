@@ -2,8 +2,9 @@ import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, Alert, ActivityIndicator, Modal,
-  KeyboardAvoidingView, Platform,
+  Platform, Keyboard,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import { Spacing, Typography } from '../theme';
@@ -47,6 +48,20 @@ export const PointFormModal: React.FC<Props> = ({ visible, onClose, onSubmit, co
   const [geoQuery, setGeoQuery] = useState('');
   const [geoResults, setGeoResults] = useState<GeoResult[]>([]);
   const [geoLoading, setGeoLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  React.useEffect(() => {
+    if (!visible) return;
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0),
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, [visible]);
 
   const reset = () => {
     setName(''); setAddress(''); setCapacity(''); setProvince('');
@@ -113,7 +128,7 @@ export const PointFormModal: React.FC<Props> = ({ visible, onClose, onSubmit, co
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
-      <View style={[s.root, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[s.root, { backgroundColor: colors.background }]}>
         <View style={[s.header, { borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={handleClose} style={s.closeBtn}>
             <Ionicons name="close" size={24} color={colors.text} />
@@ -122,9 +137,9 @@ export const PointFormModal: React.FC<Props> = ({ visible, onClose, onSubmit, co
           <View style={{ width: 40 }} />
         </View>
 
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView
-            contentContainerStyle={s.body}
+        <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[s.body, keyboardHeight > 0 && { paddingBottom: keyboardHeight + Spacing.xxl }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -266,8 +281,7 @@ export const PointFormModal: React.FC<Props> = ({ visible, onClose, onSubmit, co
               }
             </TouchableOpacity>
           </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 };

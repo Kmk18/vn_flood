@@ -12,6 +12,7 @@ import { useTheme } from '../theme/useTheme';
 import { rescueApi, RescuePoint, RescueRequest } from '../api/rescue';
 import { GlobalStyles } from '../theme/globalStyles';
 import { PostAlertForm } from '../components/PostAlertForm';
+import { PointFormModal, PointFormData } from '../components/PointFormModal';
 import { API_URL } from '../api/client';
 import { useResponderStore } from '../store/useResponderStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -198,6 +199,7 @@ export const ResponderScreen = () => {
   const [pointFilter, setPointFilter] = useState<PointFilter>('all');
   const [showPointFilter, setShowPointFilter] = useState(false);
   const [pointSort, togglePointSort] = useSort();
+  const [showPointModal, setShowPointModal] = useState(false);
 
 
   const SortHdr = ({ col, label, s, toggle, style }: {
@@ -278,6 +280,12 @@ export const ResponderScreen = () => {
       Alert.alert('Lỗi', msg);
     }
     setUpdatingId(null);
+  };
+
+  const handleAddPoint = async (data: PointFormData) => {
+    const point = await rescueApi.createPoint(data);
+    setPoints((prev) => [point, ...prev]);
+    setShowPointModal(false);
   };
 
   const handleTogglePoint = async (point: RescuePoint) => {
@@ -467,6 +475,12 @@ export const ResponderScreen = () => {
             >
               <Ionicons name="options-outline" size={18} color={showPointFilter ? '#fff' : colors.textSecondary} />
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.pointIconBtn, { backgroundColor: colors.primary }]}
+              onPress={() => setShowPointModal(true)}
+            >
+              <Ionicons name="add" size={22} color="#fff" />
+            </TouchableOpacity>
           </View>
 
           {showPointFilter && (
@@ -549,6 +563,12 @@ export const ResponderScreen = () => {
             )}
           </ScrollView>
 
+          <PointFormModal
+            visible={showPointModal}
+            onClose={() => setShowPointModal(false)}
+            onSubmit={handleAddPoint}
+            colors={colors}
+          />
         </View>
       )}
 

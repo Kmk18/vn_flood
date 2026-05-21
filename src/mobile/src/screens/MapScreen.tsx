@@ -27,9 +27,9 @@ function haversineMeters(
   a: { latitude: number; longitude: number },
   b: { latitude: number; longitude: number },
 ): number {
-  const R = 6_371_000;
-  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
-  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const R = 6_371_000; //average Earth radius in meters
+  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180; // Δφ
+  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180; //
   const h =
     Math.sin(dLat / 2) ** 2 +
     Math.cos((a.latitude * Math.PI) / 180) *
@@ -127,8 +127,6 @@ const RequestPin = React.memo(({ r, pinColor, onPress }: {
     </Marker>
   );
 });
-
-
 
 export const MapScreen = () => {
   const navigation = useNavigation();
@@ -469,7 +467,7 @@ export const MapScreen = () => {
       <MapView
         ref={mapRef}
         provider={PROVIDER_DEFAULT}
-        style={GlobalStyles.mapAbsolute}
+        style={[GlobalStyles.mapAbsolute, mapUiStyle === 'dark' && { backgroundColor: '#324447' }]}
         initialRegion={VIETNAM_REGION}
         mapType={mapType}
         userInterfaceStyle={mapUiStyle}

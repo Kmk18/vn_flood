@@ -9,6 +9,15 @@ import { useAlertStore, Alert } from '../store/useAlertStore';
 
 const formatBadge = (n: number) => (n >= 10 ? '9+' : String(n));
 
+function formatAlertTimestamp(ts: string | number): { date: string | null; time: string } {
+  const d = new Date(ts);
+  const isToday = d.toDateString() === new Date().toDateString();
+  return {
+    date: isToday ? null : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
+    time: d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
 export const NotificationsScreen = () => {
   const { colors } = useTheme();
   const alerts = useAlertStore((state) => state.alerts);
@@ -77,9 +86,15 @@ export const NotificationsScreen = () => {
               </Text>
             </View>
             <View style={styles.headerRight}>
-              <Text style={[Typography.caption, { color: colors.textSecondary }]}>
-                {new Date(item.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
+              {(() => {
+                const { date, time } = formatAlertTimestamp(item.timestamp);
+                return (
+                  <View style={{ alignItems: 'flex-end', gap: 1 }}>
+                    {date && <Text style={[Typography.caption, { color: colors.textSecondary }]}>{date}</Text>}
+                    <Text style={[Typography.caption, { color: colors.textSecondary }]}>{time}</Text>
+                  </View>
+                );
+              })()}
               {canExpand && (
                 <Ionicons
                   name={open ? 'chevron-up' : 'chevron-down'}

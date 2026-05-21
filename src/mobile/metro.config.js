@@ -20,7 +20,7 @@ config.resolver.disableHierarchicalLookup = true;
 // back to the mobile project root so Metro resolves ./index.ts correctly.
 config.server = {
   ...config.server,
-  unstable_serverRoot: projectRoot,
+  unstable_serverRoot: workspaceRoot,
 };
 
 module.exports = config;

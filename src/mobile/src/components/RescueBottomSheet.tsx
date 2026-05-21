@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Animated, Image,
-  Dimensions, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert,
+  Dimensions, StyleSheet, ScrollView, Platform, Alert, Keyboard,
 } from 'react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
@@ -51,6 +51,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
   const [photos, setPhotos] = useState<string[]>([]);
 
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const keyboardAnim = useRef(new Animated.Value(0)).current;
   const pulseAnims = useRef([
     new Animated.Value(0),
     new Animated.Value(0),
@@ -74,6 +75,28 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
     }
   }, [visible, shareLocation]);
 
+  // Slide sheet up when keyboard appears
+  useEffect(() => {
+    if (!visible) return;
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => Animated.timing(keyboardAnim, {
+        toValue: e.endCoordinates.height,
+        duration: Platform.OS === 'ios' ? e.duration : 220,
+        useNativeDriver: false,
+      }).start(),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      (e) => Animated.timing(keyboardAnim, {
+        toValue: 0,
+        duration: Platform.OS === 'ios' ? e.duration : 220,
+        useNativeDriver: false,
+      }).start(),
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, [visible, keyboardAnim]);
+
   // Mount before animating in; unmount only after animating out
   useEffect(() => {
     if (visible) {
@@ -84,6 +107,7 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
         duration: 260,
         useNativeDriver: true,
       }).start(() => {
+        keyboardAnim.setValue(0);
         setMounted(false);
         setSubmitted(false);
         setDescription('');
@@ -247,15 +271,10 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
   if (!mounted) return null;
 
   return (
-    <Animated.View
-      style={[
-        styles.sheet,
-        { backgroundColor: themeColors.card, transform: [{ translateY: slideAnim }] },
-      ]}
-    >
-      {/* Drag handle */}
-      <View style={[styles.handle, { backgroundColor: themeColors.border }]} />
-
+    <Animated.View style={[styles.sheetOuter, { bottom: keyboardAnim }]}>
+      <Animated.View
+        style={[styles.sheet, { backgroundColor: themeColors.card, transform: [{ translateY: slideAnim }] }]}
+      >
       {/* Header */}
       <View style={styles.header}>
         {/* Pulsing SOS indicator */}
@@ -290,16 +309,12 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView
+      <ScrollView
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
-          contentContainerStyle={styles.body}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          style={{ flex: 1 }}
-        >
           {/* Description */}
           <TextInput
             style={[styles.descInput, { color: themeColors.text }]}
@@ -456,16 +471,19 @@ export const RescueBottomSheet: React.FC<Props> = ({ visible, onClose, onSelectS
             </Text>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </Animated.View>
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  sheet: {
+  sheetOuter: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
     height: SHEET_HEIGHT,
+  },
+  sheet: {
+    flex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.10,
@@ -513,9 +531,9 @@ const styles = StyleSheet.create({
   stepperValueInput: { fontSize: 16, fontWeight: '600', minWidth: 32, textAlign: 'center' },
 
   // Photo thumbnails
-  thumbWrap: { marginRight: Spacing.s, position: 'relative' },
+  thumbWrap: { marginRight: Spacing.s },
   thumb: { width: 76, height: 76, borderRadius: 8 },
-  thumbRemove: { position: 'absolute', top: -6, right: -6 },
+  thumbRemove: { position: 'absolute', top: 4, right: 4 },
   thumbAdd: {
     width: 76, height: 76, borderRadius: 8,
     borderWidth: 1, alignItems: 'center', justifyContent: 'center',

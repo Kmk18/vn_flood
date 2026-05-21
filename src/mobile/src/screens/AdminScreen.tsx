@@ -463,10 +463,14 @@ export const AdminScreen = () => {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
           <View style={styles.statGrid}>
-            <StatCard icon="people" label="Người dùng" value={stats?.totalUsers ?? null} color={colors.primary} />
-            <StatCard icon="alert-circle" label="Yêu cầu cứu hộ" value={stats?.activeRescueRequests ?? null} color={colors.danger} />
-            <StatCard icon="analytics" label="Dự báo hôm nay" value={stats?.predictionsToday ?? null} color="#2ECC71" />
-            <StatCard icon="notifications" label="Thông báo" value={stats?.activeAlerts ?? null} color="#F39C12" />
+            <View style={styles.statRow}>
+              <StatCard icon="people" label="Người dùng" value={stats?.totalUsers ?? null} color={colors.primary} />
+              <StatCard icon="alert-circle" label="Yêu cầu cứu hộ" value={stats?.activeRescueRequests ?? null} color={colors.danger} />
+            </View>
+            <View style={styles.statRow}>
+              <StatCard icon="analytics" label="Dự báo hôm nay" value={stats?.predictionsToday ?? null} color="#2ECC71" />
+              <StatCard icon="notifications" label="Thông báo" value={stats?.activeAlerts ?? null} color="#F39C12" />
+            </View>
           </View>
           <Text style={[Typography.label, { color: colors.textSecondary, marginTop: Spacing.s }]}>THAO TÁC NHANH</Text>
           <View style={[styles.card, { backgroundColor: colors.card }]}>
@@ -677,8 +681,9 @@ const styles = StyleSheet.create({
   roleBadge: { paddingHorizontal: Spacing.s, paddingVertical: 3, borderRadius: 6 },
   body: { padding: Spacing.m, paddingBottom: Spacing.xxl, gap: Spacing.s },
   // Dashboard
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.s, marginBottom: Spacing.s },
-  statCard: { width: '47.5%', padding: Spacing.m, borderRadius: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+  statGrid: { gap: Spacing.s, marginBottom: Spacing.s },
+  statRow: { flexDirection: 'row', gap: Spacing.s },
+  statCard: { flex: 1, padding: Spacing.m, borderRadius: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
   statIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   card: { borderRadius: 12, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
   actionRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.m },
