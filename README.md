@@ -189,5 +189,3 @@ Cache Redis: basins 24 giờ, dự báo 1 giờ, điểm sơ tán 1 giờ. Tất
 | Load test (3.875 request, đỉnh 50 req/s) | p95 = 162 ms · 0% lỗi |
 | Stress test (34.275 request, đỉnh 500 req/s) | Ổn định đến 150 req/s · phục hồi trong 20 giây |
 | UI test (51 kịch bản, Android 13) | 51/51 đạt |
-
-Xem [docs/TESTING.md](docs/TESTING.md) để biết cấu hình Artillery và danh sách kiểm thử UI.
